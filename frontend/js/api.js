@@ -1,7 +1,9 @@
-// Cambia la URL local por tu backend en producción
-const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://127.0.0.1:8000'
-    : 'https://bibliograma-jjn.onrender.com'; // URL de tu backend en Render
+// Configuración del backend según el entorno
+const API_CONFIG = {
+    BASE_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://127.0.0.1:8000'
+        : 'https://bibliograma-jjn.onrender.com'   // ← tu backend en Render
+};
 
 const ApiService = {
     async obtenerUsuarios() {
