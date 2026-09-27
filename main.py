@@ -25,7 +25,7 @@ app.add_middleware(
         "http://127.0.0.1:5500",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
-        "https://trivia-iglesia-backend.onrender.com",  # ← tu URL de Render (ajústala si cambia)
+        "https://bibliogramajjn.vercel.app",  # ← tu URL de Render (ajústala si cambia)
     ],
     allow_credentials=True,
     allow_methods=["*"],
