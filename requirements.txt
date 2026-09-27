@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+email-validator
+python-dotenv
+google-genai
+feedparser
+tenacity
+apscheduler
+requests
+psycopg2-binary
