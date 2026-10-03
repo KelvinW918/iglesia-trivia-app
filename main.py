@@ -16,6 +16,28 @@ from database import engine, get_db, SessionLocal, Base
 import models
 import services
 
+import traceback
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
+
+class DebugMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as e:
+            print("=" * 80)
+            print("ERROR EN ENDPOINT:", request.url.path)
+            print(traceback.format_exc())
+            print("=" * 80)
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": str(e),
+                    "tipo": type(e).__name__,
+                    "endpoint": request.url.path,
+                    "traceback": traceback.format_exc().split("\n"),
+                },
+            )
 
 # ════════════════════════════════════════════════════════════
 # CONFIG TEMPORAL (en Fase 4 se centraliza en config.py)
@@ -203,6 +225,8 @@ async def lifespan(app: FastAPI):
 # APP
 # ════════════════════════════════════════════════════════════
 app = FastAPI(title="Trivia Iglesia API", version="1.0", lifespan=lifespan)
+
+app.add_middleware(DebugMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
