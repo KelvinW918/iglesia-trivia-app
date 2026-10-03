@@ -1,13 +1,11 @@
 import os
-import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, status, Query
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
@@ -20,64 +18,33 @@ from database import engine, get_db, SessionLocal
 # Crear tablas en la BD si no existen
 models.Base.metadata.create_all(bind=engine)
 
-# ==========================================
-# CONFIGURACIÓN DE SEGURIDAD Y JWT
-# ==========================================
+# Configuración de seguridad
 SECRET_KEY = os.getenv("SECRET_KEY", "clave_secreta_super_segura_devocionales_12345")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 días
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    # Si la clave en BD es directa de 4 dígitos o está hasheada
+    if plain_password == hashed_password:
+        return True
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        return False
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No se pudieron validar las credenciales de autenticación.",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    user = db.query(models.User).filter(models.User.id == int(user_id)).first()
-    if user is None:
-        raise credentials_exception
-    return user
-
-def require_pastor(current_user: models.User = Depends(get_current_user)) -> models.User:
-    if current_user.rol not in ["pastor", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requieren privilegios de pastor o administrador para realizar esta acción."
-        )
-    return current_user
-
 
 # ==========================================
-# ESQUEMAS PYDANTIC (Alineados con models.py)
+# ESQUEMAS PYDANTIC
 # ==========================================
 class UserCreate(BaseModel):
     nombre: str
-    password: str
+    password: str  # Representa el PIN de 4 dígitos
     telegram_id: Optional[str] = None
-    rol: Optional[str] = "miembro"  # "miembro" o "pastor"
+    rol: Optional[str] = "miembro"
 
 class UserResponse(BaseModel):
     id: int
@@ -89,29 +56,20 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+class LoginRequest(BaseModel):
+    user_id: Optional[int] = None
+    nombre: Optional[str] = None
+    password: str
 
 class QuestionCreate(BaseModel):
     devocional_id: int
     enunciado: str
-    tipo: Optional[str] = "desarrollo"  # "desarrollo", "seleccion_simple", "v_f"
-    opciones: Optional[str] = None  # Puede ser un String JSON o texto separado por comas
+    tipo: Optional[str] = "desarrollo"
+    opciones: Optional[str] = None
     respuesta_correcta: Optional[str] = None
 
 class QuestionResponse(QuestionCreate):
     id: int
-
-    class Config:
-        from_attributes = True
-
-class QuestionResponseForUser(BaseModel):
-    id: int
-    devocional_id: int
-    enunciado: str
-    tipo: str
-    opciones: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -129,19 +87,12 @@ class DevotionalResponse(DevotionalCreate):
     class Config:
         from_attributes = True
 
-class DevotionalUserResponse(DevotionalCreate):
-    id: int
-    fecha: datetime
-    questions: List[QuestionResponseForUser] = []
-
-    class Config:
-        from_attributes = True
-
 class SingleAnswerSubmit(BaseModel):
     question_id: int
     respuesta_texto: str
 
 class BatchAnswerSubmit(BaseModel):
+    user_id: int
     respuestas: List[SingleAnswerSubmit]
 
 class PendingReviewResponse(BaseModel):
@@ -155,6 +106,7 @@ class PendingReviewResponse(BaseModel):
 
 class ReviewSubmit(BaseModel):
     respuesta_id: int
+    evaluador_id: int
     aprobar: bool
     puntos_otorgados: int = 10
     feedback_pastor: Optional[str] = None
@@ -167,29 +119,18 @@ class RankingUser(BaseModel):
 
 
 # ==========================================
-# CICLO DE VIDA DE LA APLICACIÓN Y SCHEDULER
+# CICLO DE VIDA Y FASTAPI INIT
 # ==========================================
 scheduler = BackgroundScheduler()
 
-def tarea_programada_limpieza():
-    """Ejemplo de tarea periódica programada utilizando la sesión de base de datos de forma segura."""
-    with SessionLocal() as db:
-        try:
-            # Lógica programada (por ejemplo, mantenimiento o verificación de respuestas)
-            pass
-        except Exception as e:
-            print(f"[Scheduler] Error en tarea programada: {e}")
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    scheduler.add_job(tarea_programada_limpieza, "cron", hour=3, minute=0)
     scheduler.start()
     yield
     scheduler.shutdown()
 
 app = FastAPI(
-    title="API Devocionales e Trivia - Módulo Pastor",
-    description="Backend ajustado al esquema exacto de models.py",
+    title="API Devocionales e Trivia",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -204,20 +145,24 @@ app.add_middleware(
 
 
 # ==========================================
-# ENDPOINTS DE AUTENTICACIÓN Y USUARIOS
+# ENDPOINTS DE USUARIOS Y AUTENTICACIÓN
 # ==========================================
+@app.get("/usuarios", response_model=List[UserResponse])
+def listar_usuarios(rol: Optional[str] = None, db: Session = Depends(get_db)):
+    """Permite al frontend llenar los desplegables de Miembros o Pastores."""
+    query = db.query(models.User)
+    if rol:
+        query = query.filter(models.User.rol == rol)
+    return query.all()
+
 @app.post("/registro", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@app.post("/usuarios/registro", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def registrar_usuario(user_data: UserCreate, db: Session = Depends(get_db)):
     nombre_clean = user_data.nombre.strip()
 
     usuario_existente = db.query(models.User).filter(models.User.nombre == nombre_clean).first()
     if usuario_existente:
-        raise HTTPException(status_code=400, detail="El nombre de usuario ya se encuentra registrado.")
-
-    if user_data.telegram_id:
-        tg_existente = db.query(models.User).filter(models.User.telegram_id == user_data.telegram_id).first()
-        if tg_existente:
-            raise HTTPException(status_code=400, detail="El Telegram ID ya está asociado a otra cuenta.")
+        raise HTTPException(status_code=400, detail="El usuario ya se encuentra registrado.")
 
     nuevo_usuario = models.User(
         nombre=nombre_clean,
@@ -231,39 +176,33 @@ def registrar_usuario(user_data: UserCreate, db: Session = Depends(get_db)):
     db.refresh(nuevo_usuario)
     return nuevo_usuario
 
-@app.post("/login", response_model=Token)
-def iniciar_sesion(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    identifier = form_data.username.strip()
+@app.post("/login")
+def iniciar_sesion(data: LoginRequest, db: Session = Depends(get_db)):
+    usuario = None
+    if data.user_id:
+        usuario = db.query(models.User).filter(models.User.id == data.user_id).first()
+    elif data.nombre:
+        usuario = db.query(models.User).filter(models.User.nombre == data.nombre.strip()).first()
 
-    # Buscar por 'nombre' o por 'telegram_id'
-    usuario = db.query(models.User).filter(
-        (models.User.nombre == identifier) | (models.User.telegram_id == identifier)
-    ).first()
+    if not usuario or not verify_password(data.password, usuario.password):
+        raise HTTPException(status_code=401, detail="PIN o usuario incorrecto.")
 
-    if not usuario or not verify_password(form_data.password, usuario.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales de acceso incorrectas.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    access_token = create_access_token(data={"sub": str(usuario.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@app.get("/me", response_model=UserResponse)
-def obtener_perfil(current_user: models.User = Depends(get_current_user)):
-    return current_user
+    return {
+        "mensaje": "Login exitoso",
+        "usuario": {
+            "id": usuario.id,
+            "nombre": usuario.nombre,
+            "rol": usuario.rol,
+            "puntuacion_total": usuario.puntuacion_total
+        }
+    }
 
 
 # ==========================================
-# ENDPOINTS DE DEVOCIONALES Y PREGUNTAS
+# ENDPOINTS DEVOCIONALES Y PREGUNTAS
 # ==========================================
 @app.post("/pastor/devocionales", response_model=DevotionalResponse, status_code=status.HTTP_201_CREATED)
-def crear_devocional(
-    devocional_data: DevotionalCreate,
-    db: Session = Depends(get_db),
-    pastor: models.User = Depends(require_pastor)
-):
+def crear_devocional(devocional_data: DevotionalCreate, db: Session = Depends(get_db)):
     nuevo_devocional = models.Devotional(
         titulo=devocional_data.titulo,
         resumen_ia=devocional_data.resumen_ia,
@@ -275,22 +214,18 @@ def crear_devocional(
     db.refresh(nuevo_devocional)
     return nuevo_devocional
 
-@app.get("/devocional/ultimo", response_model=DevotionalUserResponse)
-def obtener_ultimo_devocional(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+@app.get("/devocional/ultimo", response_model=DevotionalResponse)
+def obtener_ultimo_devocional(db: Session = Depends(get_db)):
     devocional = db.query(models.Devotional).order_by(models.Devotional.fecha.desc()).first()
     if not devocional:
-        raise HTTPException(status_code=404, detail="No se encontraron devocionales registrados.")
+        raise HTTPException(status_code=404, detail="No hay devocionales registrados.")
     return devocional
 
 @app.post("/pastor/preguntas", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
-def crear_pregunta(
-    pregunta_data: QuestionCreate,
-    db: Session = Depends(get_db),
-    pastor: models.User = Depends(require_pastor)
-):
+def crear_pregunta(pregunta_data: QuestionCreate, db: Session = Depends(get_db)):
     devocional = db.query(models.Devotional).filter(models.Devotional.id == pregunta_data.devocional_id).first()
     if not devocional:
-        raise HTTPException(status_code=404, detail="El devocional especificado no existe.")
+        raise HTTPException(status_code=404, detail="El devocional no existe.")
 
     nueva_pregunta = models.Question(
         devocional_id=pregunta_data.devocional_id,
@@ -306,39 +241,33 @@ def crear_pregunta(
 
 
 # ==========================================
-# ENVÍO DE RESPUESTAS POR EL USUARIO
+# RESPUESTAS Y EVALUACIÓN PASTORAL
 # ==========================================
 @app.post("/respuestas")
-def enviar_respuestas(
-    envio: BatchAnswerSubmit,
-    db: Session = Depends(get_db),
-    usuario: models.User = Depends(get_current_user)
-):
+def enviar_respuestas(envio: BatchAnswerSubmit, db: Session = Depends(get_db)):
+    usuario = db.query(models.User).filter(models.User.id == envio.user_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+
     resultados = []
-    puntos_ganados_autoseleccion = 0
+    puntos_inmediatos = 0
 
     for item in envio.respuestas:
         pregunta = db.query(models.Question).filter(models.Question.id == item.question_id).first()
         if not pregunta:
             continue
 
-        # Evitar respuestas duplicadas para la misma pregunta por usuario
         existente = db.query(models.UserAnswer).filter(
             models.UserAnswer.user_id == usuario.id,
             models.UserAnswer.question_id == pregunta.id
         ).first()
 
         if existente:
-            resultados.append({
-                "question_id": pregunta.id,
-                "estado": existente.estado,
-                "mensaje": "Ya has respondido a esta pregunta previamente."
-            })
+            resultados.append({"question_id": pregunta.id, "estado": existente.estado, "mensaje": "Ya respondida."})
             continue
 
         texto_limpio = item.respuesta_texto.strip() if item.respuesta_texto else ""
 
-        # Evaluación automática si es selección simple o V/F
         if pregunta.tipo in ["seleccion_simple", "v_f"] and pregunta.respuesta_correcta:
             char_resp = texto_limpio.upper()[0] if texto_limpio else ""
             char_corr = pregunta.respuesta_correcta.strip().upper()[0] if pregunta.respuesta_correcta else ""
@@ -358,16 +287,9 @@ def enviar_respuestas(
 
             if es_correcta:
                 usuario.puntuacion_total += puntos
-                puntos_ganados_autoseleccion += puntos
-
-            resultados.append({
-                "question_id": pregunta.id,
-                "estado": estado_resp,
-                "puntos_otorgados": puntos
-            })
+                puntos_inmediatos += puntos
 
         else:
-            # Preguntas de tipo "desarrollo" quedan pendientes de revisión pastoral
             registro = models.UserAnswer(
                 user_id=usuario.id,
                 question_id=pregunta.id,
@@ -376,11 +298,6 @@ def enviar_respuestas(
                 puntos_otorgados=0,
                 fecha_envio=datetime.now(timezone.utc)
             )
-            resultados.append({
-                "question_id": pregunta.id,
-                "estado": "pendiente",
-                "mensaje": "Respuesta enviada. Pendiente de evaluación pastoral."
-            })
 
         db.add(registro)
 
@@ -389,19 +306,12 @@ def enviar_respuestas(
 
     return {
         "puntuacion_total": usuario.puntuacion_total,
-        "puntos_obtenidos_inmediatos": puntos_ganados_autoseleccion,
+        "puntos_obtenidos_inmediatos": puntos_inmediatos,
         "detalles": resultados
     }
 
-
-# ==========================================
-# MÓDULO PASTOR (REVISIÓN Y EVALUACIÓN)
-# ==========================================
 @app.get("/pastor/revisiones/pendientes", response_model=List[PendingReviewResponse])
-def listar_respuestas_pendientes(
-    db: Session = Depends(get_db),
-    pastor: models.User = Depends(require_pastor)
-):
+def listar_respuestas_pendientes(db: Session = Depends(get_db)):
     pendientes = (
         db.query(models.UserAnswer)
         .join(models.Question)
@@ -425,17 +335,10 @@ def listar_respuestas_pendientes(
     return respuesta
 
 @app.post("/pastor/revisiones/evaluar")
-def evaluar_respuesta_desarrollo(
-    evaluacion: ReviewSubmit,
-    db: Session = Depends(get_db),
-    pastor: models.User = Depends(require_pastor)
-):
+def evaluar_respuesta(evaluacion: ReviewSubmit, db: Session = Depends(get_db)):
     respuesta = db.query(models.UserAnswer).filter(models.UserAnswer.id == evaluacion.respuesta_id).first()
     if not respuesta:
-        raise HTTPException(status_code=404, detail="La respuesta seleccionada no existe.")
-
-    if respuesta.estado != "pendiente":
-        raise HTTPException(status_code=400, detail="Esta respuesta ya ha sido evaluada previamente.")
+        raise HTTPException(status_code=404, detail="Respuesta no encontrada.")
 
     nuevo_estado = "aprobada" if evaluacion.aprobar else "rechazada"
     puntos = evaluacion.puntos_otorgados if evaluacion.aprobar else 0
@@ -444,17 +347,13 @@ def evaluar_respuesta_desarrollo(
     respuesta.puntos_otorgados = puntos
     respuesta.feedback_pastor = evaluacion.feedback_pastor
     respuesta.fecha_evaluacion = datetime.now(timezone.utc)
-    respuesta.evaluado_por = pastor.id
+    respuesta.evaluado_por = evaluacion.evaluador_id
 
     if evaluacion.aprobar and puntos > 0:
         respuesta.user.puntuacion_total += puntos
 
     db.commit()
-    return {
-        "mensaje": "Evaluación guardada correctamente.",
-        "estado": nuevo_estado,
-        "puntos_otorgados": puntos
-    }
+    return {"mensaje": "Evaluación guardada.", "estado": nuevo_estado, "puntos_otorgados": puntos}
 
 
 # ==========================================
@@ -482,10 +381,7 @@ def obtener_ranking(
         ]
 
     ahora = datetime.now(timezone.utc)
-    if periodo == "diario":
-        inicio = ahora.replace(hour=0, minute=0, second=0, microsecond=0)
-    else:  # semanal
-        inicio = ahora - timedelta(days=7)
+    inicio = ahora.replace(hour=0, minute=0, second=0, microsecond=0) if periodo == "diario" else ahora - timedelta(days=7)
 
     ranking_query = (
         db.query(
