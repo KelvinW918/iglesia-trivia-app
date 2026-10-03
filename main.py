@@ -18,7 +18,7 @@ import services
 
 
 # ════════════════════════════════════════════════════════════
-# CONFIG TEMPORAL (en Fase 2 se centraliza en config.py)
+# CONFIG TEMPORAL (en Fase 4 se centraliza en config.py)
 # ════════════════════════════════════════════════════════════
 TZ_CARACAS = ZoneInfo("America/Caracas")
 
@@ -67,58 +67,96 @@ def seed_default_pastor() -> None:
 
 
 # ════════════════════════════════════════════════════════════
+# PROCESAMIENTO DEL DEVOCIONAL DEL DÍA (idempotente)
+# ════════════════════════════════════════════════════════════
+def procesar_devocional_del_dia(db: Session) -> dict:
+    """
+    Función central IDEMPOTENTE. Puede llamarse N veces al día sin efectos.
+    Retorna dict con estado:
+      'ya_existe' | 'sin_video' | 'video_ya_usado' | 'creado'
+    """
+    hoy_ve = ahora_ve().date()
+
+    # 1. ¿Ya existe devocional para HOY?
+    existente_hoy = (
+        db.query(models.Devotional)
+        .filter(models.Devotional.fecha == hoy_ve)
+        .first()
+    )
+    if existente_hoy:
+        return {
+            "estado": "ya_existe",
+            "mensaje": f"Ya existe devocional para hoy ({hoy_ve}).",
+            "devocional_id": existente_hoy.id,
+            "titulo": existente_hoy.titulo,
+        }
+
+    # 2. Buscar video de HOY
+    video = services.obtener_devocional_de_hoy()
+    if not video:
+        return {
+            "estado": "sin_video",
+            "mensaje": "Aún no se ha publicado el devocional de hoy. Se reintentará.",
+        }
+
+    # 3. ¿Ese youtube_id ya fue usado?
+    existente_yt = (
+        db.query(models.Devotional)
+        .filter(models.Devotional.youtube_id == video.get("youtube_id"))
+        .first()
+    )
+    if existente_yt:
+        return {
+            "estado": "video_ya_usado",
+            "mensaje": f"El video ya fue registrado (devocional #{existente_yt.id}).",
+            "devocional_id": existente_yt.id,
+        }
+
+    # 4. Crear devocional + preguntas
+    nuevo = models.Devotional(
+        titulo=video["titulo"],
+        resumen_ia=f"Devocional basado en el video oficial: {video['link']}",
+        fecha=hoy_ve,
+        youtube_id=video.get("youtube_id"),
+    )
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+
+    preguntas = services.generar_preguntas_con_gemini(video["titulo"])
+    for q in preguntas:
+        db.add(models.Question(
+            devocional_id=nuevo.id,
+            enunciado=q.get("enunciado"),
+            tipo=q.get("tipo", "desarrollo"),
+            opciones=json.dumps(q.get("opciones", [])),
+            respuesta_correcta=q.get("respuesta_correcta", ""),
+        ))
+    db.commit()
+
+    return {
+        "estado": "creado",
+        "devocional_id": nuevo.id,
+        "titulo": nuevo.titulo,
+        "link_video": video["link"],
+        "preguntas_generadas": len(preguntas),
+    }
+
+
+# ════════════════════════════════════════════════════════════
 # SCHEDULER (arrancado dentro del lifespan, no al importar)
 # ════════════════════════════════════════════════════════════
 scheduler = BackgroundScheduler(timezone="America/Caracas")
 
 
 def tarea_programada_devocional():
-    """Job diario 6:00 AM (Venezuela): genera el devocional del día."""
+    """Job idempotente. Se ejecuta varias veces al día."""
     db = SessionLocal()
     try:
-        print(f"[{ahora_ve()}] Ejecutando generador automático de devocional diario...")
-
-        # ⚠️ Fase 2: cambiará el nombre por el definitivo tras alinear services.py
-        video = services.obtener_devocional_de_hoy()
-        if not video:
-            print("No se encontró video nuevo en YouTube.")
-            return
-
-        existente = (
-            db.query(models.Devotional)
-            .filter(models.Devotional.titulo == video["titulo"])
-            .first()
-        )
-        if existente:
-            print("El devocional de este video ya existe en la base de datos.")
-            return
-
-        nuevo_devocional = models.Devotional(
-            titulo=video["titulo"],
-            resumen_ia=f"Devocional basado en el video oficial: {video['link']}",
-            fecha=ahora_ve().date(),
-            youtube_id=video.get("youtube_id"),   # ⚠️ Fase 3 reforzará idempotencia
-        )
-        db.add(nuevo_devocional)
-        db.commit()
-        db.refresh(nuevo_devocional)
-
-        preguntas_json = services.generar_preguntas_con_gemini(video["titulo"])
-        for q_data in preguntas_json:
-            opciones_str = json.dumps(q_data.get("opciones", []))
-            nueva_q = models.Question(
-                devocional_id=nuevo_devocional.id,
-                enunciado=q_data.get("enunciado"),
-                tipo=q_data.get("tipo", "desarrollo"),
-                opciones=opciones_str,
-                respuesta_correcta=q_data.get("respuesta_correcta", ""),
-            )
-            db.add(nueva_q)
-        db.commit()
-        print("✅ Devocional diario generado y publicado con éxito.")
+        resultado = procesar_devocional_del_dia(db)
+        print(f"[cron] {resultado['estado']}: {resultado.get('mensaje', '')}")
     except Exception as e:
-        db.rollback()
-        print(f"❌ Error en la tarea automática de devocionales: {e}")
+        print(f"❌ Error en cron de devocionales: {e}")
     finally:
         db.close()
 
@@ -138,19 +176,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[lifespan] ⚠️ No se pudo sembrar al pastor: {e}")
 
-    # 3. Programar y arrancar el job diario
+    # 3. Programar y arrancar el job (reintentos cada 2h de 6am a 10pm)
     scheduler.add_job(
         tarea_programada_devocional,
         trigger="cron",
-        hour=6,
+        hour="6-22/2",              # 6, 8, 10, 12, 14, 16, 18, 20, 22
         minute=0,
         id="devocional_diario",
         replace_existing=True,
         max_instances=1,
-        misfire_grace_time=3600,   # si el server estaba dormido, corre igual hasta 1h después
+        misfire_grace_time=3600,    # si el server estaba dormido, corre hasta 1h tarde
+        coalesce=True,              # si perdió varios, ejecuta solo 1
     )
     scheduler.start()
-    print("[lifespan] ⏰ Scheduler iniciado (6:00 AM America/Caracas)")
+    print("[lifespan] ⏰ Scheduler iniciado (reintentos 6am-10pm America/Caracas)")
 
     yield
 
@@ -237,93 +276,26 @@ def login_usuario(data: UserLogin, db: Session = Depends(get_db)):
 @app.api_route("/devocionales/generar-diario", methods=["GET", "POST"])
 def generar_devocional_diario(db: Session = Depends(get_db)):
     """
-    Ruta para extraer el último video de YouTube y generar automáticamente
-    las preguntas estructuradas con Gemini.
-
-    Es IDEMPOTENTE: si ya existe un devocional para HOY, no crea otro.
-    Esto permite que UptimeRobot u otro cron lo llame múltiples veces al día
-    sin efectos secundarios.
-
-    Acepta GET y POST para compatibilidad con UptimeRobot (que usa GET).
+    Idempotente: si ya existe devocional para HOY, no crea otro.
+    Llama a procesar_devocional_del_dia().
     """
-    hoy = date.today()
+    return procesar_devocional_del_dia(db)
 
-    # 1. Verificar si ya existe un devocional para HOY
-    existente_hoy = db.query(models.Devotional).filter(
-        models.Devotional.fecha == hoy
-    ).first()
-    if existente_hoy:
-        return {
-            "estado": "ya_existe",
-            "mensaje": f"Ya existe un devocional para hoy ({hoy}). No se crea otro.",
-            "devocional_id": existente_hoy.id,
-            "titulo": existente_hoy.titulo
-        }
-
-    # 2. Buscar video nuevo
-    video = services.obtener_ultimo_video_youtube()
-    if not video:
-        return {
-            "estado": "sin_video",
-            "mensaje": "No se encontró video nuevo en YouTube. Se reintentará más tarde."
-        }
-
-    # 3. Verificar que el video no haya sido usado antes (por si acaso)
-    existente_titulo = db.query(models.Devotional).filter(
-        models.Devotional.titulo == video["titulo"]
-    ).first()
-    if existente_titulo:
-        return {
-            "estado": "video_ya_usado",
-            "mensaje": f"El video '{video['titulo']}' ya fue registrado en otro devocional.",
-            "devocional_id": existente_titulo.id
-        }
-
-    # 4. Crear devocional
-    nuevo_devocional = models.Devotional(
-        titulo=video["titulo"],
-        resumen_ia=f"Devocional basado en el video oficial: {video['link']}",
-        fecha=hoy
-    )
-    db.add(nuevo_devocional)
-    db.commit()
-    db.refresh(nuevo_devocional)
-
-    preguntas_json = services.generar_preguntas_con_gemini(video["titulo"])
-    preguntas_creadas = []
-
-    for q_data in preguntas_json:
-        opciones_str = json.dumps(q_data.get("opciones", []))
-        nueva_q = models.Question(
-            devocional_id=nuevo_devocional.id,
-            enunciado=q_data.get("enunciado"),
-            tipo=q_data.get("tipo", "desarrollo"),
-            opciones=opciones_str,
-            respuesta_correcta=q_data.get("respuesta_correcta", "")
-        )
-        db.add(nueva_q)
-        preguntas_creadas.append({
-            "tipo": q_data.get("tipo"),
-            "enunciado": q_data.get("enunciado"),
-            "opciones": q_data.get("opciones", []),
-            "respuesta_correcta": q_data.get("respuesta_correcta")
-        })
-
-    db.commit()
-    return {
-        "estado": "creado",
-        "devocional": video["titulo"],
-        "link_video": video["link"],
-        "preguntas_generadas": preguntas_creadas
-    }
-
-@app.get("/devocionales/activo", summary="Obtener el devocional activo más reciente con preguntas")
+@app.get("/devocionales/activo", summary="Obtener el devocional de HOY con preguntas")
 def obtener_devocional_activo(usuario_id: int, db: Session = Depends(get_db)):
-    # Buscamos directamente el último devocional creado para evitar problemas de desfase con la fecha
-    devocional = db.query(models.Devotional).order_by(models.Devotional.id.desc()).first()
+    # Solo el devocional de HOY (Venezuela). Si no hay, 404.
+    hoy_ve = ahora_ve().date()
+    devocional = (
+        db.query(models.Devotional)
+        .filter(models.Devotional.fecha == hoy_ve)
+        .first()
+    )
 
     if not devocional:
-        raise HTTPException(status_code=404, detail="Aún no hay devocionales publicados en el sistema.")
+        raise HTTPException(
+            status_code=404,
+            detail="Aún no se ha publicado el devocional de hoy. Vuelve más tarde."
+        )
 
     # Verificar de forma robusta si este usuario ya respondió alguna pregunta de este devocional
     preguntas_ids = [q.id for q in devocional.questions]
@@ -465,7 +437,7 @@ def obtener_ranking(periodo: str = "total", db: Session = Depends(get_db)):
 
     Solo se incluyen usuarios con rol "miembro".
     """
-    hoy = date.today()
+    hoy = ahora_ve().date()
 
     # Determinar la fecha de corte según el período
     if periodo == "diario":
