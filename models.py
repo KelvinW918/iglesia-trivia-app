@@ -27,6 +27,7 @@ class Devotional(Base):
     titulo = Column(String, nullable=False)
     fecha = Column(DateTime, default=datetime.datetime.utcnow)
     resumen_ia = Column(Text, nullable=True)
+    youtube_id = Column(String, unique=True, nullable=True, index=True)  # ← NUEVO
 
     questions = relationship("Question", back_populates="devotional", cascade="all, delete-orphan")
 
