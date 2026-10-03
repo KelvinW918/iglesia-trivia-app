@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 pydantic
+pydantic-settings
 email-validator
 python-dotenv
 google-genai
@@ -15,3 +16,5 @@ passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
 bcrypt==4.0.1
 python-multipart>=0.0.12
+httpx
+alembic

@@ -1,28 +1,48 @@
+# database.py
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-# 1. Lee la URL desde las variables de entorno de Render (o SQLite en local)
-SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "sqlite:///./trivia_iglesia.db"
+
+def _normalize_db_url(url: str) -> str:
+    """Render entrega postgres:// o postgresql://; SQLAlchemy exige dialecto+driver."""
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql://") and "+psycopg2" not in url:
+        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return url
+
+
+SQLALCHEMY_DATABASE_URL = _normalize_db_url(
+    os.getenv("DATABASE_URL", "sqlite:///./trivia_iglesia.db")
 )
 
-# 2. Corrección del prefijo para compatibilidad con Render y SQLAlchemy
-if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
-    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+is_sqlite = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
 
-# 3. SQLite necesita "check_same_thread", PostgreSQL no.
-connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
+# ─── Engine: tuning crítico para Render free tier ───
+# pool_pre_ping → detecta conexiones muertas antes de usarlas
+# pool_recycle  → recicla conexiones antes de que Render las cierre (~5 min idle)
+engine_kwargs = {
+    "pool_pre_ping": True,
+    "pool_recycle": 280,
+}
 
-# 4. Creación del motor y la sesión
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=connect_args)
+if is_sqlite:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["connect_args"] = {"connect_timeout": 10}
+    engine_kwargs["pool_size"] = 5
+    engine_kwargs["max_overflow"] = 10
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **engine_kwargs)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+
 def get_db():
+    """Dependency de FastAPI: cede una sesión y la cierra al terminar."""
     db = SessionLocal()
     try:
         yield db
