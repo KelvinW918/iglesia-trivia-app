@@ -16,7 +16,7 @@ const AuthComponent = {
         return `
             <div class="text-center space-y-3 relative z-10">
                 <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-slate-900/70 border border-slate-700/60 shadow-lg shadow-black/30">
-                    <img src="./img/logo.png"
+                    <img src="./img/logo_blanco.png"
                          alt="CCRF Jehová Justicia Nuestra"
                          class="w-14 h-14 object-contain auth-logo">
                 </div>
