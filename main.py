@@ -97,7 +97,7 @@ def procesar_devocional_del_dia(db: Session) -> dict:
     """
     Función central IDEMPOTENTE. Puede llamarse N veces al día sin efectos.
     Retorna dict con estado:
-      'ya_existe' | 'sin_video' | 'video_ya_usado' | 'creado'
+      'ya_existe' | 'sin_video' | 'video_ya_usado' | 'creado' | 'error_gemini'
     """
     hoy_ve = ahora_ve().date()
     desde = datetime.combine(hoy_ve, datetime.min.time())
@@ -140,35 +140,49 @@ def procesar_devocional_del_dia(db: Session) -> dict:
             "devocional_id": existente_yt.id,
         }
 
-    # 4. Crear devocional + preguntas
-    nuevo = models.Devotional(
-        titulo=video["titulo"],
-        resumen_ia=f"Devocional basado en el video oficial: {video['link']}",
-        fecha=hoy_ve,
-        youtube_id=video.get("youtube_id"),
-    )
-    db.add(nuevo)
-    db.commit()
-    db.refresh(nuevo)
+    # 4. Crear devocional + preguntas (transacción atómica)
+    try:
+        nuevo = models.Devotional(
+            titulo=video["titulo"],
+            resumen_ia=f"Devocional basado en el video oficial: {video['link']}",
+            fecha=hoy_ve,
+            youtube_id=video.get("youtube_id"),
+        )
+        db.add(nuevo)
+        db.flush()  # obtiene el ID sin commitear
 
-    preguntas = services.generar_preguntas_con_gemini(video["titulo"])
-    for q in preguntas:
-        db.add(models.Question(
-            devocional_id=nuevo.id,
-            enunciado=q.get("enunciado"),
-            tipo=q.get("tipo", "desarrollo"),
-            opciones=json.dumps(q.get("opciones", [])),
-            respuesta_correcta=q.get("respuesta_correcta", ""),
-        ))
-    db.commit()
+        preguntas = services.generar_preguntas_con_gemini(video["titulo"])
 
-    return {
-        "estado": "creado",
-        "devocional_id": nuevo.id,
-        "titulo": nuevo.titulo,
-        "link_video": video["link"],
-        "preguntas_generadas": len(preguntas),
-    }
+        if not preguntas:
+            raise ValueError("Gemini no devolvió preguntas (lista vacía).")
+
+        for q in preguntas:
+            db.add(models.Question(
+                devocional_id=nuevo.id,
+                enunciado=q.get("enunciado"),
+                tipo=q.get("tipo", "desarrollo"),
+                opciones=json.dumps(q.get("opciones", [])),
+                respuesta_correcta=q.get("respuesta_correcta", ""),
+            ))
+
+        db.commit()
+        db.refresh(nuevo)
+
+        return {
+            "estado": "creado",
+            "devocional_id": nuevo.id,
+            "titulo": nuevo.titulo,
+            "link_video": video["link"],
+            "preguntas_generadas": len(preguntas),
+        }
+
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error creando devocional del día: {e}")
+        return {
+            "estado": "error_gemini",
+            "mensaje": f"Falló la generación de preguntas: {e}",
+        }
 
 
 # ════════════════════════════════════════════════════════════
