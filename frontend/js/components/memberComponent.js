@@ -90,6 +90,26 @@ const MemberComponent = {
             .replace(/'/g, '&#39;');
     },
 
+    /**
+     * Badge circular reutilizable con el logo CCRF.
+     * size: 'sm' | 'md' | 'lg'
+     */
+    _renderLogoBadge(size = 'md') {
+        const sizes = {
+            sm: { box: 'w-12 h-12', padding: 'p-1', radius: 'rounded-xl' },
+            md: { box: 'w-16 h-16', padding: 'p-1.5', radius: 'rounded-2xl' },
+            lg: { box: 'w-24 h-24', padding: 'p-2', radius: 'rounded-2xl' },
+        };
+        const s = sizes[size] || sizes.md;
+        return `
+            <div class="inline-flex items-center justify-center ${s.box} ${s.radius} bg-white shadow-lg shadow-indigo-500/15 border border-slate-200 overflow-hidden">
+                <img src="./img/logo_blanco.png"
+                     alt="CCRF Jehová Justicia Nuestra"
+                     class="w-full h-full object-contain ${s.padding}">
+            </div>
+        `;
+    },
+
     // ════════════════════════════════════════════════════════════
     // RENDER PRINCIPAL
     // ════════════════════════════════════════════════════════════
@@ -99,10 +119,19 @@ const MemberComponent = {
         // ─── Bloqueo: pastores no responden devocionales como miembros ───
         if (usuario && usuario.rol === 'pastor') {
             container.innerHTML = `
-                <div class="bg-slate-800/80 p-8 rounded-2xl border border-amber-500/30 text-center space-y-3">
-                    <i data-lucide="shield-alert" class="w-10 h-10 text-amber-400 mx-auto"></i>
-                    <h3 class="text-lg font-bold text-white">Acceso de Pastor</h3>
-                    <p class="text-sm text-slate-300">Como pastor, no participas en los devocionales como miembro. Usa el Portal Pastoral para evaluar las respuestas.</p>
+                <div class="bg-slate-800/80 p-8 rounded-2xl border border-amber-500/30 text-center space-y-4">
+                    ${this._renderLogoBadge('md')}
+                    <div class="space-y-2">
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30">
+                            <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-400"></i>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-400">Acceso de Pastor</span>
+                        </div>
+                        <h3 class="text-lg font-bold text-white">Bienvenido, pastor</h3>
+                        <p class="text-sm text-slate-300 leading-relaxed">
+                            Como pastor, no participas en los devocionales como miembro.
+                            Usa el Portal Pastoral para evaluar las respuestas de la comunidad.
+                        </p>
+                    </div>
                 </div>`;
             if (typeof lucide !== 'undefined') lucide.createIcons();
             return;
@@ -110,9 +139,12 @@ const MemberComponent = {
 
         // ─── Estado de carga ───
         container.innerHTML = `
-            <div class="bg-slate-800/80 p-8 rounded-2xl border border-slate-700/60 text-center space-y-3" role="status" aria-live="polite">
-                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500 mx-auto"></div>
-                <p class="text-sm text-slate-400">Cargando devocional del día...</p>
+            <div class="bg-slate-800/80 p-8 rounded-2xl border border-slate-700/60 text-center space-y-4" role="status" aria-live="polite">
+                ${this._renderLogoBadge('md')}
+                <div class="space-y-3">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
+                    <p class="text-sm text-slate-400">Cargando devocional del día...</p>
+                </div>
             </div>`;
 
         let response;
@@ -154,20 +186,26 @@ const MemberComponent = {
     // ════════════════════════════════════════════════════════════
     _renderSinDevocional(container, usuario) {
         container.innerHTML = `
-            <div class="bg-slate-800/80 p-8 rounded-2xl border border-amber-500/30 text-center space-y-4">
-                <i data-lucide="calendar-clock" class="w-12 h-12 text-amber-400 mx-auto"></i>
+            <div class="bg-slate-800/80 p-8 rounded-2xl border border-amber-500/30 text-center space-y-5 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500/0 via-amber-500/60 to-amber-500/0"></div>
+
+                ${this._renderLogoBadge('lg')}
+
                 <div class="space-y-2">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30">
+                        <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-amber-400"></i>
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-amber-400">Próximamente</span>
+                    </div>
                     <h3 class="text-lg font-bold text-white">Aún no está listo el devocional de hoy</h3>
-                    <p class="text-sm text-slate-300 leading-relaxed">
+                    <p class="text-sm text-slate-300 leading-relaxed max-w-sm mx-auto">
                         El devocional se publica cuando el pastor lo sube a YouTube.
                         Suele estar disponible en la mañana.
                     </p>
-                    <p class="text-xs text-slate-400">
-                        Vuelve a intentar más tarde o mañana temprano.
-                    </p>
+                    <p class="text-xs text-slate-400 italic">Vuelve a intentar más tarde o mañana temprano.</p>
                 </div>
+
                 <button id="btn-recargar-devocional"
-                    class="inline-flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    class="inline-flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition shadow-lg shadow-indigo-600/20 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-800">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                     <span>Buscar de nuevo</span>
                 </button>
@@ -188,14 +226,22 @@ const MemberComponent = {
     // ════════════════════════════════════════════════════════════
     _renderError(container, usuario, mensaje) {
         container.innerHTML = `
-            <div class="bg-slate-800/80 p-8 rounded-2xl border border-rose-500/30 text-center space-y-4">
-                <i data-lucide="alert-triangle" class="w-12 h-12 text-rose-400 mx-auto"></i>
+            <div class="bg-slate-800/80 p-8 rounded-2xl border border-rose-500/30 text-center space-y-5 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500/0 via-rose-500/60 to-rose-500/0"></div>
+
+                ${this._renderLogoBadge('lg')}
+
                 <div class="space-y-2">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30">
+                        <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-400"></i>
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-rose-400">Error de conexión</span>
+                    </div>
                     <h3 class="text-lg font-bold text-white">No pudimos cargar el devocional</h3>
-                    <p class="text-sm text-slate-300 leading-relaxed">${this._escapeHtml(mensaje)}</p>
+                    <p class="text-sm text-slate-300 leading-relaxed max-w-sm mx-auto">${this._escapeHtml(mensaje)}</p>
                 </div>
+
                 <button id="btn-reintentar-devocional"
-                    class="inline-flex items-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-xl transition focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    class="inline-flex items-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-xl transition shadow-lg shadow-rose-600/20 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 focus:ring-offset-slate-800">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                     <span>Reintentar</span>
                 </button>
@@ -233,7 +279,7 @@ const MemberComponent = {
                 `).join('');
 
             } else if (q.tipo === 'seleccion_multiple') {
-                // ✅ FIX: checkboxes para selección múltiple
+                // Checkboxes para selección múltiple
                 inputHtml = `
                     <p class="text-xs text-slate-400 italic mb-2">Puedes marcar varias opciones.</p>
                     ${q.opciones.map(op => `
@@ -271,31 +317,45 @@ const MemberComponent = {
 
         const linkVideoHtml = videoUrl ? `
             <a href="${videoUrl}" target="_blank" rel="noopener noreferrer"
-                class="inline-flex items-center space-x-2 text-indigo-400 hover:text-indigo-300 text-sm font-medium pt-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-1">
-                <i data-lucide="youtube" class="w-4 h-4 text-rose-500"></i>
-                <span>Ver video oficial en YouTube</span>
-                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                class="inline-flex items-center space-x-2 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 hover:bg-rose-500/20 hover:border-rose-500/40 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-rose-500">
+                <i data-lucide="youtube" class="w-4 h-4 text-rose-400"></i>
+                <span>Ver video oficial</span>
+                <i data-lucide="external-link" class="w-3.5 h-3.5 opacity-60"></i>
             </a>
         ` : '';
 
         container.innerHTML = `
-            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-6 space-y-6 shadow-xl">
-                <div class="space-y-2">
-                    <span class="text-xs font-semibold text-indigo-400 tracking-wider uppercase">Devocional Diario</span>
-                    <h2 class="text-xl font-bold text-white leading-snug">${this._escapeHtml(data.titulo)}</h2>
-                    ${linkVideoHtml}
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl overflow-hidden shadow-xl">
+                <!-- Header con logo + título -->
+                <div class="p-5 border-b border-slate-700/60 bg-gradient-to-br from-slate-800/90 to-slate-900/80">
+                    <div class="flex items-start gap-4">
+                        ${this._renderLogoBadge('sm')}
+                        <div class="min-w-0 flex-1 space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold uppercase tracking-[0.15em] text-indigo-400">Devocional Diario</span>
+                                <span class="w-1 h-1 rounded-full bg-slate-600"></span>
+                                <span class="text-[10px] uppercase tracking-wider text-slate-400">Hoy</span>
+                            </div>
+                            <h2 class="text-lg sm:text-xl font-bold text-white leading-snug">${this._escapeHtml(data.titulo)}</h2>
+                            <div>${linkVideoHtml}</div>
+                        </div>
+                    </div>
                 </div>
 
-                <form id="form-devocional" class="space-y-4" novalidate>
+                <!-- Formulario -->
+                <form id="form-devocional" class="p-5 sm:p-6 space-y-4" novalidate>
                     ${preguntasHtml}
-                    <button type="submit" id="btn-enviar-respuestas"
-                        class="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600 text-white font-semibold py-3.5 rounded-xl transition shadow-lg shadow-indigo-600/20 flex items-center justify-center space-x-2">
-                        <i data-lucide="send" class="w-4 h-4"></i>
-                        <span>Enviar Respuestas</span>
-                    </button>
-                    <p class="text-xs text-slate-400 text-center pt-1">
-                        Una vez enviadas, no podrás modificar tus respuestas.
-                    </p>
+
+                    <div class="pt-2 space-y-3">
+                        <button type="submit" id="btn-enviar-respuestas"
+                            class="btn-shine w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600 text-white font-semibold py-3.5 rounded-xl transition shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-800">
+                            <i data-lucide="send" class="w-4 h-4"></i>
+                            <span>Enviar Respuestas</span>
+                        </button>
+                        <p class="text-xs text-slate-400 text-center">
+                            Una vez enviadas, no podrás modificar tus respuestas.
+                        </p>
+                    </div>
                 </form>
             </div>
         `;
@@ -383,9 +443,12 @@ const MemberComponent = {
     // ════════════════════════════════════════════════════════════
     async renderDevocionalCompletado(container, usuario, devocionalId, titulo) {
         container.innerHTML = `
-            <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700/60 text-center space-y-3" role="status" aria-live="polite">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
-                <p class="text-sm text-slate-400">Cargando tu feedback pastoral...</p>
+            <div class="bg-slate-800/80 p-6 rounded-2xl border border-slate-700/60 text-center space-y-4" role="status" aria-live="polite">
+                ${this._renderLogoBadge('md')}
+                <div class="space-y-3">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto"></div>
+                    <p class="text-sm text-slate-400">Cargando tu feedback pastoral...</p>
+                </div>
             </div>`;
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
@@ -394,7 +457,7 @@ const MemberComponent = {
             detalle = await ApiService.obtenerRespuestasMiembro(usuario.id, devocionalId);
         } catch (err) {
             container.innerHTML = `
-                <div class="bg-slate-800/80 p-6 rounded-2xl border border-rose-500/30 text-center space-y-2">
+                <div class="bg-slate-800/80 p-6 rounded-2xl border border-rose-500/30 text-center space-y-3">
                     <i data-lucide="alert-circle" class="w-8 h-8 text-rose-400 mx-auto"></i>
                     <p class="text-sm text-rose-300">No se pudo cargar tu feedback: ${this._escapeHtml(err.message)}</p>
                 </div>`;
@@ -480,18 +543,24 @@ const MemberComponent = {
                 </span>`;
 
         container.innerHTML = `
-            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-6 space-y-6 shadow-xl">
-                <div class="space-y-3 pb-4 border-b border-slate-700/60">
-                    <div class="flex items-center gap-3">
-                        <div class="inline-flex p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl">
-                            <i data-lucide="check-circle-2" class="w-6 h-6"></i>
-                        </div>
-                        <div>
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl overflow-hidden shadow-xl">
+                <!-- Header con logo -->
+                <div class="p-5 border-b border-slate-700/60 bg-gradient-to-br from-emerald-900/20 to-slate-900/80">
+                    <div class="flex items-start gap-4">
+                        ${this._renderLogoBadge('sm')}
+                        <div class="min-w-0 flex-1 space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40">
+                                    <i data-lucide="check-circle-2" class="w-3 h-3 text-emerald-400"></i>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Completado</span>
+                                </span>
+                            </div>
                             <h3 class="text-lg font-bold text-white">¡Devocional completado!</h3>
-                            <p class="text-xs text-slate-400">${this._escapeHtml(titulo)}</p>
+                            <p class="text-xs text-slate-400 leading-snug">${this._escapeHtml(titulo)}</p>
                         </div>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2 pt-1">
+
+                    <div class="flex flex-wrap items-center gap-2 pt-3">
                         <span class="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
                             <i data-lucide="award" class="w-3.5 h-3.5"></i>
                             ${r.puntos_totales} pts este devocional
@@ -503,10 +572,11 @@ const MemberComponent = {
                     </div>
                 </div>
 
-                <div class="space-y-4">
+                <!-- Detalle pregunta por pregunta -->
+                <div class="p-5 sm:p-6 space-y-4">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                         <i data-lucide="list-checks" class="w-4 h-4 text-indigo-400"></i>
-                        Detalle de tus respuestas y feedback pastoral
+                        Tus respuestas y feedback pastoral
                     </h4>
                     ${respuestasHtml}
                 </div>
