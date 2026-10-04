@@ -10,14 +10,42 @@ const AuthComponent = {
     // ════════════════════════════════════════════════════════════
 
     /**
-     * Muestra una alerta inline arriba del formulario.
-     * tipo: 'error' | 'exito' | 'info'
+     * Header reutilizable: logo + texto CCRF + título + subtítulo
      */
+    _renderAuthHeader({ eyebrow, title, subtitle }) {
+        return `
+            <div class="text-center space-y-3 relative z-10">
+                <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-slate-900/70 border border-slate-700/60 shadow-lg shadow-black/30">
+                    <img src="./img/logo.png"
+                         alt="CCRF Jehová Justicia Nuestra"
+                         class="w-14 h-14 object-contain auth-logo">
+                </div>
+                <div class="space-y-1">
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">${eyebrow}</p>
+                    <h1 class="text-2xl font-extrabold tracking-tight text-white">${title}</h1>
+                    <p class="text-sm text-slate-300">${subtitle}</p>
+                </div>
+            </div>
+        `;
+    },
+
+    /**
+     * Bloque de estrellas decorativas
+     */
+    _renderStars() {
+        return `
+            <div class="auth-stars" aria-hidden="true">
+                <span class="auth-star"></span>
+                <span class="auth-star"></span>
+                <span class="auth-star"></span>
+                <span class="auth-star"></span>
+            </div>
+        `;
+    },
+
     mostrarAlerta(tipo, mensaje) {
         const container = document.getElementById(this.containerId);
         if (!container) return;
-
-        // Eliminar alertas previas
         this.limpiarAlerta();
 
         const estilos = {
@@ -31,13 +59,12 @@ const AuthComponent = {
         alerta.id = 'auth-alerta';
         alerta.setAttribute('role', 'alert');
         alerta.setAttribute('aria-live', 'assertive');
-        alerta.className = `flex items-start gap-3 p-3 rounded-xl border text-sm ${estilos[tipo] || estilos.error}`;
+        alerta.className = `flex items-start gap-3 p-3 rounded-xl border text-sm ${estilos[tipo] || estilos.error} relative z-10`;
         alerta.innerHTML = `
             <i data-lucide="${iconos[tipo] || 'alert-circle'}" class="w-5 h-5 flex-shrink-0 mt-0.5"></i>
             <span class="flex-1">${mensaje}</span>
         `;
 
-        // Insertar antes del <form> dentro de la tarjeta
         const form = container.querySelector('form');
         if (form && form.parentNode) {
             form.parentNode.insertBefore(alerta, form);
@@ -47,7 +74,6 @@ const AuthComponent = {
 
         if (window.lucide) lucide.createIcons();
 
-        // Auto-eliminar tras 7s
         setTimeout(() => {
             const el = document.getElementById('auth-alerta');
             if (el) el.remove();
@@ -59,10 +85,6 @@ const AuthComponent = {
         if (el) el.remove();
     },
 
-    /**
-     * Pone un botón en estado "cargando" con spinner.
-     * Retorna el HTML original para restaurarlo después.
-     */
     setLoading(btn, texto = 'Procesando...') {
         if (!btn) return null;
         const htmlOriginal = btn.innerHTML;
@@ -86,10 +108,6 @@ const AuthComponent = {
         if (window.lucide) lucide.createIcons();
     },
 
-    /**
-     * Aplica el toggle de mostrar/ocultar PIN a un input.
-     * Accesible por teclado y lectores de pantalla.
-     */
     setupPinToggle(inputEl, buttonEl) {
         if (!inputEl || !buttonEl) return;
         buttonEl.addEventListener('click', () => {
@@ -102,9 +120,6 @@ const AuthComponent = {
         });
     },
 
-    /**
-     * Restringe un input a solo 4 dígitos numéricos.
-     */
     setupPinInput(inputEl) {
         if (!inputEl) return;
         inputEl.addEventListener('input', (e) => {
@@ -119,16 +134,16 @@ const AuthComponent = {
         const container = document.getElementById(this.containerId);
         container.innerHTML = `
             <div class="flex-1 flex items-center justify-center p-4">
-                <div class="bg-slate-800 border border-slate-700/60 p-8 rounded-2xl shadow-2xl w-full max-w-md space-y-6">
-                    <div class="text-center space-y-2">
-                        <div class="inline-flex p-3 bg-indigo-500/10 text-indigo-400 rounded-xl mb-2">
-                            <i data-lucide="shield-check" class="w-8 h-8"></i>
-                        </div>
-                        <h1 class="text-2xl font-bold tracking-tight text-white">Comunidad Devocional</h1>
-                        <p class="text-sm text-slate-300">Selecciona tu perfil e ingresa tu PIN</p>
-                    </div>
+                <div class="auth-card rounded-2xl p-8 w-full max-w-md space-y-6">
+                    ${this._renderStars()}
 
-                    <form id="form-login" class="space-y-4">
+                    ${this._renderAuthHeader({
+            eyebrow: 'CCRF Jehová Justicia Nuestra',
+            title: 'Bienvenido de nuevo',
+            subtitle: 'Selecciona tu perfil e ingresa tu PIN'
+        })}
+
+                    <form id="form-login" class="space-y-4 relative z-10">
                         <div>
                             <label for="select-usuario-login" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Miembro</label>
                             <div class="relative">
@@ -167,13 +182,13 @@ const AuthComponent = {
                         </div>
 
                         <button type="submit" id="btn-ejecutar-login"
-                            class="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600 text-white font-semibold py-3.5 rounded-xl transition duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/20 text-base">
+                            class="btn-shine w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600 text-white font-semibold py-3.5 rounded-xl transition duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/30 text-base">
                             <span>Ingresar</span>
                             <i data-lucide="arrow-right" class="w-5 h-5"></i>
                         </button>
                     </form>
 
-                    <div class="border-t border-slate-700/60 pt-4 flex items-center justify-between text-xs">
+                    <div class="border-t border-slate-700/60 pt-4 flex items-center justify-between text-xs relative z-10">
                         <p class="text-slate-400">¿No tienes cuenta?
                             <button id="link-ir-registro" class="text-indigo-400 hover:underline font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">Regístrate</button>
                         </p>
@@ -193,10 +208,8 @@ const AuthComponent = {
         document.getElementById('link-ir-registro').onclick = () => this.renderRegisterView();
         document.getElementById('link-portal-pastor').onclick = () => this.renderPastorLoginView();
 
-        // Cargar lista de miembros (async, sin bloquear UI)
         this.cargarSelectUsuariosMiembros();
 
-        // Submit
         document.getElementById('form-login').onsubmit = async (e) => {
             e.preventDefault();
             this.limpiarAlerta();
@@ -247,16 +260,16 @@ const AuthComponent = {
         const container = document.getElementById(this.containerId);
         container.innerHTML = `
             <div class="flex-1 flex items-center justify-center p-4">
-                <div class="bg-slate-800 border border-slate-700/60 p-8 rounded-2xl shadow-2xl w-full max-w-md space-y-6">
-                    <div class="text-center space-y-2">
-                        <div class="inline-flex p-3 bg-emerald-500/10 text-emerald-400 rounded-xl mb-2">
-                            <i data-lucide="user-plus" class="w-8 h-8"></i>
-                        </div>
-                        <h1 class="text-2xl font-bold tracking-tight text-white">Registro de Miembro</h1>
-                        <p class="text-sm text-slate-300">Crea tu cuenta para unirte a los devocionales</p>
-                    </div>
+                <div class="auth-card accent-emerald rounded-2xl p-8 w-full max-w-md space-y-6">
+                    ${this._renderStars()}
 
-                    <form id="form-registro" class="space-y-4">
+                    ${this._renderAuthHeader({
+            eyebrow: 'CCRF Jehová Justicia Nuestra',
+            title: 'Crear cuenta',
+            subtitle: 'Únete a la comunidad devocional'
+        })}
+
+                    <form id="form-registro" class="space-y-4 relative z-10">
                         <div>
                             <label for="reg-nombre" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Nombre Completo</label>
                             <div class="relative">
@@ -304,13 +317,13 @@ const AuthComponent = {
                         </div>
 
                         <button type="submit" id="btn-registro"
-                            class="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600 text-white font-semibold py-3.5 rounded-xl transition duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20 text-base">
+                            class="btn-shine w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600 text-white font-semibold py-3.5 rounded-xl transition duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/30 text-base">
                             <span>Completar Registro</span>
                             <i data-lucide="check" class="w-5 h-5"></i>
                         </button>
                     </form>
 
-                    <div class="border-t border-slate-700/60 pt-4 text-center">
+                    <div class="border-t border-slate-700/60 pt-4 text-center relative z-10">
                         <p class="text-xs text-slate-400">¿Ya estás registrado?
                             <button id="link-ir-login" class="text-indigo-400 hover:underline font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">Volver al login</button>
                         </p>
@@ -360,7 +373,6 @@ const AuthComponent = {
                     this.mostrarAlerta('exito', '¡Registro exitoso! Ahora ingresa con tu PIN.');
                     this.resetButton(btn, htmlOriginal);
 
-                    // Volver al login tras 2s y preseleccionar al usuario
                     setTimeout(() => {
                         this.renderLoginView();
                     }, 1800);
@@ -383,16 +395,16 @@ const AuthComponent = {
         const container = document.getElementById(this.containerId);
         container.innerHTML = `
             <div class="flex-1 flex items-center justify-center p-4">
-                <div class="bg-slate-900 border border-indigo-500/30 p-8 rounded-2xl shadow-2xl w-full max-w-md space-y-6">
-                    <div class="text-center space-y-2">
-                        <div class="inline-flex p-3 bg-indigo-500/10 text-indigo-400 rounded-xl mb-2">
-                            <i data-lucide="shield-alert" class="w-8 h-8"></i>
-                        </div>
-                        <h1 class="text-2xl font-bold tracking-tight text-white">Portal Pastoral</h1>
-                        <p class="text-sm text-slate-300">Acceso exclusivo para líderes y pastores autorizados</p>
-                    </div>
+                <div class="auth-card accent-indigo-deep rounded-2xl p-8 w-full max-w-md space-y-6">
+                    ${this._renderStars()}
 
-                    <form id="form-login-pastor" class="space-y-4">
+                    ${this._renderAuthHeader({
+            eyebrow: 'Portal Pastoral',
+            title: 'Acceso restringido',
+            subtitle: 'Solo líderes y pastores autorizados'
+        })}
+
+                    <form id="form-login-pastor" class="space-y-4 relative z-10">
                         <div>
                             <label for="select-pastor-login" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Seleccionar Pastor</label>
                             <div class="relative">
@@ -424,13 +436,13 @@ const AuthComponent = {
                         </div>
 
                         <button type="submit" id="btn-login-pastor"
-                            class="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600 text-white font-semibold py-3.5 rounded-xl transition duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/20 text-base">
+                            class="btn-shine w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600 text-white font-semibold py-3.5 rounded-xl transition duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/30 text-base">
                             <span>Acceder al Panel Pastoral</span>
                             <i data-lucide="arrow-right" class="w-5 h-5"></i>
                         </button>
                     </form>
 
-                    <div class="border-t border-slate-800 pt-4 text-center">
+                    <div class="border-t border-slate-800 pt-4 text-center relative z-10">
                         <button id="link-volver-miembro"
                             class="text-xs text-indigo-400 hover:underline font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-2">
                             ← Volver al acceso de miembros
@@ -449,7 +461,6 @@ const AuthComponent = {
 
         document.getElementById('link-volver-miembro').onclick = () => this.renderLoginView();
 
-        // Cargar lista de pastores (async)
         this.cargarSelectPastores();
 
         document.getElementById('form-login-pastor').onsubmit = async (e) => {
@@ -487,20 +498,18 @@ const AuthComponent = {
     },
 
     // ════════════════════════════════════════════════════════════
-    // CARGA DE SELECTS
+    // CARGA DE SELECTS (sin cambios)
     // ════════════════════════════════════════════════════════════
     async cargarSelectUsuariosMiembros() {
         const select = document.getElementById('select-usuario-login');
         if (!select) return;
 
-        // Estado "cargando": deshabilitado
         select.disabled = true;
         select.innerHTML = '<option value="">⏳ Cargando usuarios...</option>';
 
         try {
             const miembros = await ApiService.obtenerMiembros();
 
-            // Si el select fue re-renderizado, abortamos
             const selectActual = document.getElementById('select-usuario-login');
             if (!selectActual) return;
 
@@ -519,7 +528,6 @@ const AuthComponent = {
                 return;
             }
 
-            // --- Pre-rellenar si hay datos guardados en localStorage ---
             const usuarioGuardado = localStorage.getItem('devocional_usuario_guardado');
             if (usuarioGuardado) {
                 try {

@@ -8,20 +8,13 @@
     <meta name="theme-color" content="#0f172a">
     <title>CCRF Jehová Justicia Nuestra · Plataforma Devocional</title>
 
-    <!-- ════════════════════════════════════════════════════════
-         FAVICONS (pestaña del navegador, iOS, Android)
-         Generados con realfavicongenerator.net
-         ════════════════════════════════════════════════════════ -->
     <link rel="icon" type="image/x-icon" href="./img/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="./img/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="./img/favicon-16x16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="./img/apple-touch-icon.png">
     <link rel="manifest" href="./img/site.webmanifest">
 
-    <!-- Tailwind CSS (CDN de desarrollo — OK para hoy) -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Lucide Icons (versión FIJA) -->
     <script src="https://unpkg.com/lucide@0.469.0"></script>
 
     <style>
@@ -32,13 +25,10 @@
             overflow-x: hidden;
         }
 
-        /* Soporte para notch/dynamic island de iPhone X+ en el nav sticky */
         .sticky.top-0 {
             padding-top: max(1rem, env(safe-area-inset-top));
         }
 
-        /* iOS: inputs con font-size < 16px hacen zoom automático al enfocar.
-           Forzamos 16px como mínimo en móviles para evitarlo. */
         @media (max-width: 768px) {
 
             input,
@@ -48,17 +38,14 @@
             }
         }
 
-        /* Scroll suave cuando usamos scrollIntoView() desde JS */
         html {
             scroll-behavior: smooth;
         }
 
-        /* Mejora el tap-highlight en iOS (evita el flash azul al tocar botones) */
         * {
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* Animación suave del logo durante la carga */
         @keyframes logo-breathe {
 
             0%,
@@ -76,14 +63,165 @@
         .logo-loading {
             animation: logo-breathe 2.2s ease-in-out infinite;
         }
+
+        /* ════════════════════════════════════════════════════════════
+           TARJETA AUTH (login / registro / pastor)
+           ════════════════════════════════════════════════════════════ */
+        .auth-card {
+            position: relative;
+            background: linear-gradient(145deg,
+                    rgba(30, 41, 59, 0.95) 0%,
+                    rgba(15, 23, 42, 0.98) 100%);
+            border: 1px solid rgba(51, 65, 85, 0.7);
+            box-shadow:
+                0 0 80px -20px rgba(99, 102, 241, 0.35),
+                0 25px 50px -12px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+        }
+
+        .auth-card.accent-emerald {
+            box-shadow:
+                0 0 80px -20px rgba(16, 185, 129, 0.35),
+                0 25px 50px -12px rgba(0, 0, 0, 0.6);
+        }
+
+        .auth-card.accent-indigo-deep {
+            border-color: rgba(99, 102, 241, 0.35);
+            box-shadow:
+                0 0 90px -18px rgba(99, 102, 241, 0.45),
+                0 25px 50px -12px rgba(0, 0, 0, 0.65);
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           ESTRELLAS FUGACES (decorativo)
+           ════════════════════════════════════════════════════════════ */
+        .auth-stars {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .auth-star {
+            position: absolute;
+            top: 0;
+            width: 3px;
+            height: 3px;
+            background: #ffffff;
+            border-radius: 50%;
+            box-shadow:
+                0 0 0 3px rgba(255, 255, 255, 0.08),
+                0 0 0 6px rgba(255, 255, 255, 0.04),
+                0 0 15px rgba(255, 255, 255, 0.55);
+            animation: auth-star-shoot 4s linear infinite;
+            will-change: transform, opacity;
+        }
+
+        .auth-star::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 180px;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.6), transparent);
+        }
+
+        @keyframes auth-star-shoot {
+            0% {
+                transform: rotate(315deg) translateX(0);
+                opacity: 1;
+            }
+
+            70% {
+                opacity: 1;
+            }
+
+            100% {
+                transform: rotate(315deg) translateX(-700px);
+                opacity: 0;
+            }
+        }
+
+        .auth-star:nth-child(1) {
+            top: 8%;
+            right: 6%;
+            animation-delay: 0s;
+            animation-duration: 3.2s;
+        }
+
+        .auth-star:nth-child(2) {
+            top: 22%;
+            right: 18%;
+            animation-delay: 1.4s;
+            animation-duration: 4.0s;
+        }
+
+        .auth-star:nth-child(3) {
+            top: 4%;
+            right: 34%;
+            animation-delay: 2.6s;
+            animation-duration: 3.6s;
+        }
+
+        .auth-star:nth-child(4) {
+            top: 45%;
+            right: 12%;
+            animation-delay: 3.4s;
+            animation-duration: 5.0s;
+        }
+
+        /* Si el usuario prefiere menos movimiento, apagamos estrellas */
+        @media (prefers-reduced-motion: reduce) {
+            .auth-star {
+                animation: none;
+                opacity: 0;
+            }
+
+            .logo-loading {
+                animation: none;
+            }
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           BRILLO EN BOTÓN SUBMIT (hover)
+           ════════════════════════════════════════════════════════════ */
+        .btn-shine {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-shine::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -120%;
+            width: 60%;
+            height: 100%;
+            background: linear-gradient(90deg,
+                    transparent,
+                    rgba(255, 255, 255, 0.28),
+                    transparent);
+            transform: skewX(-20deg);
+            transition: left 0.7s ease;
+            pointer-events: none;
+        }
+
+        .btn-shine:hover::before {
+            left: 130%;
+        }
+
+        /* Logo glow suave en las tarjetas auth */
+        .auth-logo {
+            filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.35));
+        }
     </style>
 </head>
 
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col antialiased">
 
-    <!-- Contenedor Dinámico de la Aplicación -->
     <div id="app" class="flex-1 flex flex-col">
-        <!-- Spinner visible mientras cargan los scripts y despierta Render -->
         <div id="app-loading" class="flex-1 flex items-center justify-center">
             <div class="text-center space-y-5">
                 <img src="./img/logo.png" alt="CCRF Jehová Justicia Nuestra"
@@ -97,23 +235,17 @@
         </div>
     </div>
 
-    <!-- Fallback si JS está deshabilitado -->
     <noscript>
         <div class="p-8 text-center text-slate-400">
             Esta aplicación requiere JavaScript. Por favor actívalo en tu navegador.
         </div>
     </noscript>
 
-    <!-- 1. Servicios base -->
     <script src="./js/api.js"></script>
-
-    <!-- 2. Componentes de UI -->
     <script src="./js/components/rankingComponent.js"></script>
     <script src="./js/components/authComponent.js"></script>
     <script src="./js/components/memberComponent.js"></script>
     <script src="./js/components/pastorComponent.js"></script>
-
-    <!-- 3. Orquestador (SIEMPRE al final) -->
     <script src="./js/app.js"></script>
 </body>
 
