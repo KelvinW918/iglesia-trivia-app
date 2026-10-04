@@ -27,6 +27,19 @@ const RankingComponent = {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     },
 
+    /**
+     * Badge muy compacto con el logo CCRF para el header del ranking.
+     */
+    _renderLogoBadgeMini() {
+        return `
+            <div class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white shadow-md shadow-indigo-500/20 border border-slate-200 overflow-hidden flex-shrink-0">
+                <img src="./img/logo_blanco.png"
+                     alt="CCRF"
+                     class="w-full h-full object-contain p-0.5">
+            </div>
+        `;
+    },
+
     // ════════════════════════════════════════════════════════════
     // RENDER
     // ════════════════════════════════════════════════════════════
@@ -36,14 +49,17 @@ const RankingComponent = {
         if (!container) return;
 
         container.innerHTML = `
-            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-6 shadow-xl space-y-4">
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-5 shadow-xl space-y-4">
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
-                        <i data-lucide="trophy" class="w-5 h-5 text-amber-400"></i>
-                        <h3 class="font-bold text-white text-lg">Ranking</h3>
+                    <div class="flex items-center space-x-2.5 min-w-0">
+                        ${this._renderLogoBadgeMini()}
+                        <div class="min-w-0">
+                            <h3 class="font-bold text-white text-base leading-tight">Ranking</h3>
+                            <p class="text-[10px] uppercase tracking-wider text-slate-400">CCRF Jehová Justicia Nuestra</p>
+                        </div>
                     </div>
                     <button id="btn-recargar-ranking" aria-label="Recargar ranking"
-                        class="p-1.5 text-slate-400 hover:text-white transition hover:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        class="p-1.5 text-slate-400 hover:text-white transition hover:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-shrink-0">
                         <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                     </button>
                 </div>
@@ -52,19 +68,19 @@ const RankingComponent = {
                 <div class="flex gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-700/50"
                     role="tablist" aria-label="Período del ranking">
                     <button data-periodo="diario" role="tab" aria-selected="false" aria-label="Ranking de hoy"
-                        class="tab-ranking flex-1 text-xs font-semibold py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        class="tab-ranking flex-1 text-[11px] sm:text-xs font-semibold py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         Hoy
                     </button>
                     <button data-periodo="semanal" role="tab" aria-selected="false" aria-label="Ranking semanal"
-                        class="tab-ranking flex-1 text-xs font-semibold py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        class="tab-ranking flex-1 text-[11px] sm:text-xs font-semibold py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         Semana
                     </button>
                     <button data-periodo="mensual" role="tab" aria-selected="false" aria-label="Ranking mensual"
-                        class="tab-ranking flex-1 text-xs font-semibold py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        class="tab-ranking flex-1 text-[11px] sm:text-xs font-semibold py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         Mes
                     </button>
                     <button data-periodo="total" role="tab" aria-selected="false" aria-label="Ranking total histórico"
-                        class="tab-ranking flex-1 text-xs font-semibold py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        class="tab-ranking flex-1 text-[11px] sm:text-xs font-semibold py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         Total
                     </button>
                 </div>
@@ -106,9 +122,9 @@ const RankingComponent = {
             const esActivo = p === this.periodoActual;
             btn.setAttribute('aria-selected', esActivo ? 'true' : 'false');
             if (esActivo) {
-                btn.className = 'tab-ranking flex-1 text-xs font-semibold py-2 rounded-lg transition bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+                btn.className = 'tab-ranking flex-1 text-[11px] sm:text-xs font-semibold py-2 rounded-lg transition bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 focus:outline-none focus:ring-2 focus:ring-indigo-500';
             } else {
-                btn.className = 'tab-ranking flex-1 text-xs font-semibold py-2 rounded-lg transition text-slate-400 hover:text-white hover:bg-slate-800/50 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+                btn.className = 'tab-ranking flex-1 text-[11px] sm:text-xs font-semibold py-2 rounded-lg transition text-slate-400 hover:text-white hover:bg-slate-800/50 focus:outline-none focus:ring-2 focus:ring-indigo-500';
             }
         });
     },
@@ -146,33 +162,44 @@ const RankingComponent = {
 
             if (hayDatos) {
                 listaContainer.innerHTML = data.ranking.map((r, i) => {
-                    // ✅ Reemplazo de emojis por iconos Lucide coherentes
+                    // ─── Configuración según posición (top 3 con más énfasis) ───
                     let medallaHtml = '';
                     let colorPuesto = 'text-slate-400';
+                    let cardClass = 'py-3 flex justify-between items-center text-sm';
+                    let nombreClass = 'font-medium text-slate-200 truncate';
 
                     if (i === 0) {
-                        medallaHtml = `<i data-lucide="medal" class="w-4 h-4 text-amber-400 fill-amber-400/20"></i>`;
+                        medallaHtml = `<i data-lucide="medal" class="w-4 h-4 text-amber-400 fill-amber-400/30 flex-shrink-0"></i>`;
                         colorPuesto = 'text-amber-400';
+                        cardClass = 'py-3 px-2 -mx-2 rounded-lg flex justify-between items-center text-sm bg-gradient-to-r from-amber-500/10 to-transparent border-l-2 border-amber-500/50';
+                        nombreClass = 'font-semibold text-white truncate';
                     } else if (i === 1) {
-                        medallaHtml = `<i data-lucide="medal" class="w-4 h-4 text-slate-300 fill-slate-300/20"></i>`;
+                        medallaHtml = `<i data-lucide="medal" class="w-4 h-4 text-slate-300 fill-slate-300/30 flex-shrink-0"></i>`;
                         colorPuesto = 'text-slate-300';
+                        cardClass = 'py-3 px-2 -mx-2 rounded-lg flex justify-between items-center text-sm bg-gradient-to-r from-slate-400/10 to-transparent border-l-2 border-slate-400/50';
+                        nombreClass = 'font-semibold text-white truncate';
                     } else if (i === 2) {
-                        medallaHtml = `<i data-lucide="medal" class="w-4 h-4 text-amber-700 fill-amber-700/20"></i>`;
-                        colorPuesto = 'text-amber-700';
+                        medallaHtml = `<i data-lucide="medal" class="w-4 h-4 text-amber-700 fill-amber-700/30 flex-shrink-0"></i>`;
+                        colorPuesto = 'text-amber-600';
+                        cardClass = 'py-3 px-2 -mx-2 rounded-lg flex justify-between items-center text-sm bg-gradient-to-r from-amber-700/10 to-transparent border-l-2 border-amber-700/50';
+                        nombreClass = 'font-semibold text-white truncate';
                     }
 
                     const sinPuntos = (r.puntuacion_total || 0) === 0;
+                    if (sinPuntos) {
+                        cardClass += ' opacity-60';
+                    }
 
                     return `
-                        <div class="py-3 flex justify-between items-center text-sm ${sinPuntos ? 'opacity-70' : ''}">
-                            <div class="flex items-center space-x-3">
-                                <span class="font-bold w-6 text-center ${colorPuesto}">#${r.puesto}</span>
-                                <span class="font-medium text-slate-200">${this._escapeHtml(r.nombre)}</span>
+                        <div class="${cardClass}">
+                            <div class="flex items-center space-x-2.5 min-w-0 flex-1">
+                                <span class="font-bold w-6 text-center ${colorPuesto} flex-shrink-0">#${r.puesto}</span>
+                                <span class="${nombreClass}">${this._escapeHtml(r.nombre)}</span>
                                 ${medallaHtml}
                             </div>
-                            <span class="font-semibold px-2.5 py-1 rounded-full text-xs ${sinPuntos
+                            <span class="font-semibold px-2.5 py-1 rounded-full text-xs flex-shrink-0 ml-2 ${sinPuntos
                             ? 'bg-slate-700/40 text-slate-400'
-                            : 'bg-indigo-500/10 text-indigo-400'}">
+                            : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'}">
                                 ${r.puntuacion_total || 0} pts
                             </span>
                         </div>`;
@@ -185,7 +212,14 @@ const RankingComponent = {
                         </div>`;
                 }
             } else {
-                listaContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Sin registros todavía.</p>`;
+                listaContainer.innerHTML = `
+                    <div class="text-center py-8 px-4 space-y-2">
+                        <div class="inline-flex p-2.5 bg-slate-800/80 rounded-full border border-slate-700">
+                            <i data-lucide="users" class="w-5 h-5 text-slate-500"></i>
+                        </div>
+                        <p class="text-xs text-slate-400">Sin registros todavía.</p>
+                        <p class="text-[11px] text-slate-500">Cuando la comunidad empiece a participar, aparecerán aquí.</p>
+                    </div>`;
             }
 
             if (typeof lucide !== 'undefined') lucide.createIcons();
