@@ -69,11 +69,31 @@ const PastorComponent = {
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     },
 
+    /**
+     * Badge circular reutilizable con el logo CCRF.
+     * size: 'sm' | 'md' | 'lg'
+     */
+    _renderLogoBadge(size = 'sm') {
+        const sizes = {
+            sm: { box: 'w-11 h-11', padding: 'p-1', radius: 'rounded-xl' },
+            md: { box: 'w-16 h-16', padding: 'p-1.5', radius: 'rounded-2xl' },
+            lg: { box: 'w-20 h-20', padding: 'p-2', radius: 'rounded-2xl' },
+        };
+        const s = sizes[size] || sizes.sm;
+        return `
+            <div class="inline-flex items-center justify-center ${s.box} ${s.radius} bg-white shadow-lg shadow-indigo-500/15 border border-slate-200 overflow-hidden flex-shrink-0">
+                <img src="./img/logo_blanco.png"
+                     alt="CCRF Jehová Justicia Nuestra"
+                     class="w-full h-full object-contain ${s.padding}">
+            </div>
+        `;
+    },
+
     // ════════════════════════════════════════════════════════════
     // RENDER PRINCIPAL
     // ════════════════════════════════════════════════════════════
     render(containerId, usuarioActual, onLogout) {
-        // 🔴 FIX BUG 1: si no llega usuarioActual, fallamos explícito
+        // 🔴 Si no llega usuarioActual, fallamos explícito
         if (!usuarioActual || !usuarioActual.id) {
             console.error('[PastorComponent] FATAL: usuarioActual no recibido. Abortando render.');
             const c = document.getElementById(containerId);
@@ -95,44 +115,46 @@ const PastorComponent = {
         container.innerHTML = `
             <div id="pastor-alerta-host"></div>
             <div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-                <!-- Header Pastor -->
-                <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-md">
-                    <div class="flex items-center space-x-3">
-                        <div class="p-2 bg-indigo-600/20 text-indigo-400 rounded-lg">
-                            <i data-lucide="book-open" class="w-6 h-6"></i>
-                        </div>
-                        <div>
-                            <h1 class="text-xl font-bold tracking-tight text-white">Devocionales Iglesia</h1>
-                            <span class="inline-block text-[10px] font-semibold uppercase px-2 py-0.5 bg-indigo-500/20 text-indigo-400 rounded-full border border-indigo-500/30">
-                                PASTOR / EVALUADOR
-                            </span>
-                        </div>
-                    </div>
 
-                    <div class="flex items-center space-x-4">
-                        <span class="text-sm font-medium text-slate-300">Hola, <strong class="text-white">${this._escapeHtml(this.usuarioActual.nombre)}</strong></span>
-                        <button id="btn-logout-pastor" title="Cerrar Sesión"
-                            class="p-2 text-slate-400 hover:text-rose-400 transition hover:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500">
-                            <i data-lucide="log-out" class="w-5 h-5"></i>
-                        </button>
+                <!-- ═══ Header Pastor ═══ -->
+                <header class="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-3 sm:py-4 shadow-md sticky top-0 z-40">
+                    <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+                        <div class="flex items-center space-x-3 min-w-0">
+                            ${this._renderLogoBadge('sm')}
+                            <div class="min-w-0">
+                                <h1 class="text-sm sm:text-lg font-bold tracking-tight text-white leading-tight truncate">CCRF Jehová Justicia Nuestra</h1>
+                                <span class="inline-block text-[10px] font-semibold uppercase px-2 py-0.5 bg-rose-500/20 text-rose-400 rounded-full border border-rose-500/30 mt-0.5">
+                                    Pastor · Evaluador
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-2 sm:space-x-4 flex-shrink-0">
+                            <span class="text-sm font-medium text-slate-300 hidden md:inline">Hola, <strong class="text-white">${this._escapeHtml(this.usuarioActual.nombre)}</strong></span>
+                            <button id="btn-logout-pastor" title="Cerrar Sesión" aria-label="Cerrar sesión"
+                                class="p-2 text-slate-400 hover:text-rose-400 transition hover:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500">
+                                <i data-lucide="log-out" class="w-5 h-5"></i>
+                            </button>
+                        </div>
                     </div>
                 </header>
 
-                <!-- Panel Principal -->
-                <main class="flex-1 p-6 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <!-- Lista -->
+                <!-- ═══ Panel Principal ═══ -->
+                <main class="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                    <!-- Lista de respuestas pendientes -->
                     <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col shadow-xl">
                         <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
                             <h2 class="text-base font-semibold text-white flex items-center gap-2">
-                                <i data-lucide="users" class="w-5 h-5 text-indigo-400"></i>
+                                <i data-lucide="inbox" class="w-5 h-5 text-indigo-400"></i>
                                 Respuestas Recibidas
                             </h2>
                             <div class="flex items-center gap-1">
-                                <button id="btn-gestion-usuarios" title="Gestión de usuarios"
+                                <button id="btn-gestion-usuarios" title="Gestión de usuarios" aria-label="Gestión de usuarios"
                                     class="p-1.5 text-slate-400 hover:text-indigo-400 transition hover:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                     <i data-lucide="user-cog" class="w-4 h-4"></i>
                                 </button>
-                                <button id="btn-recargar-respuestas" title="Recargar respuestas"
+                                <button id="btn-recargar-respuestas" title="Recargar respuestas" aria-label="Recargar respuestas"
                                     class="p-1.5 text-slate-400 hover:text-white transition hover:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                 </button>
@@ -148,17 +170,17 @@ const PastorComponent = {
                         </div>
                     </div>
 
-                    <!-- Detalle -->
+                    <!-- Panel de detalle -->
                     <div id="panel-revision-respuesta"
                         class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-center items-center">
-                        <div class="text-center max-w-sm space-y-3 py-16 text-slate-400">
-                            <div class="inline-flex p-4 bg-slate-800/80 rounded-2xl text-slate-400 mb-2">
-                                <i data-lucide="file-text" class="w-10 h-10"></i>
+                        <div class="text-center max-w-sm space-y-4 py-12 text-slate-400">
+                            ${this._renderLogoBadge('lg')}
+                            <div class="space-y-2">
+                                <h3 class="text-lg font-semibold text-slate-300">Selecciona un miembro</h3>
+                                <p class="text-xs text-slate-400 leading-relaxed">
+                                    Haz clic en un miembro de la lista para revisar sus respuestas del devocional y enviar tu retroalimentación pastoral.
+                                </p>
                             </div>
-                            <h3 class="text-lg font-semibold text-slate-300">Selecciona un Miembro</h3>
-                            <p class="text-xs text-slate-400 leading-relaxed">
-                                Haz clic en un miembro de la lista izquierda para revisar sus respuestas del devocional.
-                            </p>
                         </div>
                     </div>
                 </main>
@@ -212,10 +234,12 @@ const PastorComponent = {
 
             if (this.respuestasPendientes.length === 0) {
                 contenedorLista.innerHTML = `
-                    <div class="text-center py-12 px-4 border border-dashed border-slate-800 rounded-xl">
-                        <i data-lucide="check-circle-2" class="w-10 h-10 text-emerald-500/60 mx-auto mb-2"></i>
-                        <p class="text-sm font-medium text-slate-300">¡Sin entregas pendientes!</p>
-                        <p class="text-xs text-slate-400 mt-1">No hay respuestas de miembros pendientes de revisión.</p>
+                    <div class="text-center py-12 px-4 border border-dashed border-emerald-500/30 rounded-xl bg-emerald-500/5">
+                        <div class="inline-flex p-3 bg-emerald-500/15 rounded-full mb-3 border border-emerald-500/30">
+                            <i data-lucide="check-circle-2" class="w-8 h-8 text-emerald-400"></i>
+                        </div>
+                        <p class="text-sm font-medium text-emerald-300">¡Sin entregas pendientes!</p>
+                        <p class="text-xs text-slate-400 mt-1">Todas las respuestas de hoy ya fueron evaluadas.</p>
                     </div>`;
                 if (typeof lucide !== 'undefined') lucide.createIcons();
                 this.mostrarPanelVacio();
@@ -237,19 +261,19 @@ const PastorComponent = {
 
             contenedorLista.innerHTML = usuariosLista.map(u => `
                 <div data-userid="${u.userId}" class="item-usuario-respuesta p-4 bg-slate-950 border border-slate-800 hover:border-indigo-500/50 rounded-xl cursor-pointer transition flex items-center justify-between group">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold border border-indigo-500/20 group-hover:bg-indigo-600 group-hover:text-white transition">
+                    <div class="flex items-center space-x-3 min-w-0">
+                        <div class="w-10 h-10 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold border border-indigo-500/20 group-hover:bg-indigo-600 group-hover:text-white transition flex-shrink-0">
                             ${this._escapeHtml(u.nombre.charAt(0).toUpperCase())}
                         </div>
-                        <div>
-                            <h4 class="text-sm font-semibold text-white group-hover:text-indigo-400 transition">${this._escapeHtml(u.nombre)}</h4>
+                        <div class="min-w-0">
+                            <h4 class="text-sm font-semibold text-white group-hover:text-indigo-400 transition truncate">${this._escapeHtml(u.nombre)}</h4>
                             <span class="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
                                 <i data-lucide="file-question" class="w-3.5 h-3.5 text-slate-400"></i>
                                 ${u.respuestas.length} respuesta(s)
                             </span>
                         </div>
                     </div>
-                    <i data-lucide="chevron-right" class="w-5 h-5 text-slate-600 group-hover:text-indigo-400 transition"></i>
+                    <i data-lucide="chevron-right" class="w-5 h-5 text-slate-600 group-hover:text-indigo-400 transition flex-shrink-0"></i>
                 </div>
             `).join('');
 
@@ -272,7 +296,7 @@ const PastorComponent = {
                     <i data-lucide="alert-circle" class="w-7 h-7 mx-auto mb-2 text-rose-400"></i>
                     <p class="text-xs font-medium mb-3">Error al cargar la lista</p>
                     <button id="btn-reintentar-respuestas"
-                        class="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-lg transition">
+                        class="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-rose-500">
                         <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
                         Reintentar
                     </button>
@@ -288,14 +312,14 @@ const PastorComponent = {
         if (!panel) return;
         panel.className = "lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-center items-center";
         panel.innerHTML = `
-            <div class="text-center max-w-sm space-y-3 py-16 text-slate-400">
-                <div class="inline-flex p-4 bg-slate-800/80 rounded-2xl text-slate-400 mb-2">
-                    <i data-lucide="file-text" class="w-10 h-10"></i>
+            <div class="text-center max-w-sm space-y-4 py-12 text-slate-400">
+                ${this._renderLogoBadge('lg')}
+                <div class="space-y-2">
+                    <h3 class="text-lg font-semibold text-slate-300">Selecciona un miembro</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        Haz clic en un miembro de la lista para revisar sus respuestas del devocional y enviar tu retroalimentación pastoral.
+                    </p>
                 </div>
-                <h3 class="text-lg font-semibold text-slate-300">Selecciona un Miembro</h3>
-                <p class="text-xs text-slate-400 leading-relaxed">
-                    Haz clic en un miembro de la lista izquierda para revisar sus respuestas.
-                </p>
             </div>`;
         if (typeof lucide !== 'undefined') lucide.createIcons();
     },
@@ -427,7 +451,7 @@ const PastorComponent = {
                 answer_id: answerId,
                 estado: dictamenSeleccionado,
                 feedback: inputFeedback.value.trim(),
-                evaluado_por: this.usuarioActual.id,   // ✅ ahora es el ID real del pastor
+                evaluado_por: this.usuarioActual.id,   // ✅ ID real del pastor
             };
 
             const htmlOriginal = this._setLoading(btnEnviar, 'Enviando...');
@@ -453,7 +477,7 @@ const PastorComponent = {
     },
 
     // ════════════════════════════════════════════════════════════
-    // GESTIÓN DE USUARIOS — FIX: ya no muestra PINs (Fase 4)
+    // GESTIÓN DE USUARIOS — ya no muestra PINs (Fase 4)
     // ════════════════════════════════════════════════════════════
     async mostrarGestionUsuarios() {
         this.vistaActual = 'usuarios';
@@ -466,9 +490,7 @@ const PastorComponent = {
             <div class="space-y-6">
                 <div class="flex items-center justify-between pb-4 border-b border-slate-800">
                     <div class="flex items-center space-x-3">
-                        <div class="inline-flex p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl">
-                            <i data-lucide="user-cog" class="w-6 h-6"></i>
-                        </div>
+                        ${this._renderLogoBadge('sm')}
                         <div>
                             <h3 class="text-lg font-bold text-white">Gestión de Usuarios</h3>
                             <p class="text-xs text-slate-400">Resetea el PIN si un miembro lo olvida</p>
@@ -520,26 +542,25 @@ const PastorComponent = {
             const miembros = usuarios.filter(u => u.rol === 'miembro').sort((a, b) => a.nombre.localeCompare(b.nombre));
             const pastores = usuarios.filter(u => u.rol === 'pastor').sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-            // ✅ FIX: ya NO mostramos u.password. Mostramos solo el botón de reset.
             const renderUsuario = (u) => `
                 <div class="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-xl">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-full ${u.rol === 'pastor' ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'} flex items-center justify-center font-bold border">
+                    <div class="flex items-center space-x-3 min-w-0">
+                        <div class="w-10 h-10 rounded-full ${u.rol === 'pastor' ? 'bg-rose-600/20 text-rose-400 border-rose-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'} flex items-center justify-center font-bold border flex-shrink-0">
                             ${this._escapeHtml(u.nombre.charAt(0).toUpperCase())}
                         </div>
-                        <div>
-                            <h4 class="text-sm font-semibold text-white">${this._escapeHtml(u.nombre)}</h4>
+                        <div class="min-w-0">
+                            <h4 class="text-sm font-semibold text-white truncate">${this._escapeHtml(u.nombre)}</h4>
                             <span class="text-xs text-slate-400">#${u.id} · ${u.rol} · ${u.puntuacion_total || 0} pts</span>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-3 flex-shrink-0">
                         <div class="text-right hidden sm:block">
                             <div class="text-[10px] uppercase text-slate-400 tracking-wider">PIN</div>
                             <div class="text-sm font-mono font-bold text-slate-500 tracking-widest">••••</div>
                         </div>
                         <button data-user-id="${u.id}" data-user-nombre="${this._escapeHtml(u.nombre)}"
                             class="btn-reset-pin p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-rose-500"
-                            title="Generar nuevo PIN">
+                            title="Generar nuevo PIN" aria-label="Resetear PIN">
                             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                         </button>
                     </div>
@@ -548,7 +569,7 @@ const PastorComponent = {
             lista.innerHTML = `
                 ${pastores.length > 0 ? `
                     <div class="pt-1">
-                        <h4 class="text-[11px] font-bold uppercase tracking-wider text-indigo-400 mb-2 flex items-center gap-2">
+                        <h4 class="text-[11px] font-bold uppercase tracking-wider text-rose-400 mb-2 flex items-center gap-2">
                             <i data-lucide="shield" class="w-3.5 h-3.5"></i>
                             Pastores (${pastores.length})
                         </h4>
@@ -583,7 +604,6 @@ const PastorComponent = {
                         const data = await res.json();
 
                         if (res.ok) {
-                            // Mostrar PIN generado en un modal simple y visible
                             const modal = document.createElement('div');
                             modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4';
                             modal.innerHTML = `
