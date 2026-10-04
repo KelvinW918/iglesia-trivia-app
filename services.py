@@ -241,3 +241,34 @@ def generar_preguntas_con_gemini(titulo_video: str) -> list:
 
     logger.info("✅ Preguntas generadas por Gemini.")
     return preguntas
+
+
+# ════════════════════════════════════════════════════════════
+# HASHING DE PINs (bcrypt)
+# ════════════════════════════════════════════════════════════
+from passlib.context import CryptContext
+import random as _random
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(plain: str) -> str:
+    """Genera un hash bcrypt del PIN en texto plano."""
+    return _pwd_context.hash(plain)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    """
+    Verifica un PIN en texto plano contra un hash bcrypt.
+    Retorna False si el hash está malformado o si no coincide.
+    """
+    try:
+        return _pwd_context.verify(plain, hashed)
+    except Exception as e:
+        logger.warning(f"Error verificando PIN: {e}")
+        return False
+
+
+def generar_pin_aleatorio() -> str:
+    """Genera un PIN numérico de 4 dígitos (1000-9999)."""
+    return str(_random.randint(1000, 9999))

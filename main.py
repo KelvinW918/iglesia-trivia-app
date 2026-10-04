@@ -42,7 +42,7 @@ class DebugMiddleware(BaseHTTPMiddleware):
 
 
 # ════════════════════════════════════════════════════════════
-# CONFIG TEMPORAL (en Fase 4 se centraliza en config.py)
+# CONFIG TEMPORAL
 # ════════════════════════════════════════════════════════════
 TZ_CARACAS = ZoneInfo("America/Caracas")
 
@@ -76,7 +76,7 @@ def seed_default_pastor() -> None:
             telegram_id=PASTOR_TELEGRAM_ID,
             rol="pastor",
             puntuacion_total=0,
-            password=PASTOR_PIN,   # ⚠️ Fase 4 lo migrará a pin_hash (bcrypt)
+            pin_hash=services.hash_password(PASTOR_PIN),   # ← bcrypt
         )
         db.add(pastor)
         db.commit()
@@ -104,7 +104,6 @@ def procesar_devocional_del_dia(db: Session) -> dict:
     hasta = desde + timedelta(days=1)
 
     # 1. ¿Ya existe devocional para HOY?
-    #    Usamos rango [desde, hasta) para comparar DateTime vs date.
     existente_hoy = (
         db.query(models.Devotional)
         .filter(models.Devotional.fecha >= desde)
@@ -149,7 +148,7 @@ def procesar_devocional_del_dia(db: Session) -> dict:
             youtube_id=video.get("youtube_id"),
         )
         db.add(nuevo)
-        db.flush()  # obtiene el ID sin commitear
+        db.flush()
 
         preguntas = services.generar_preguntas_con_gemini(video["titulo"])
 
@@ -186,7 +185,7 @@ def procesar_devocional_del_dia(db: Session) -> dict:
 
 
 # ════════════════════════════════════════════════════════════
-# SCHEDULER (arrancado dentro del lifespan, no al importar)
+# SCHEDULER
 # ════════════════════════════════════════════════════════════
 scheduler = BackgroundScheduler(timezone="America/Caracas")
 
@@ -204,38 +203,34 @@ def tarea_programada_devocional():
 
 
 # ════════════════════════════════════════════════════════════
-# LIFESPAN: init DB + seed pastor + scheduler
+# LIFESPAN
 # ════════════════════════════════════════════════════════════
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Crear tablas si no existen (en Render/Postgres es idempotente)
     Base.metadata.create_all(bind=engine)
     print("[lifespan] ✅ Tablas verificadas/creadas")
 
-    # 2. Seed del pastor (idempotente)
     try:
         seed_default_pastor()
     except Exception as e:
         print(f"[lifespan] ⚠️ No se pudo sembrar al pastor: {e}")
 
-    # 3. Programar y arrancar el job (reintentos cada 2h de 6am a 10pm)
     scheduler.add_job(
         tarea_programada_devocional,
         trigger="cron",
-        hour="6-22/2",              # 6, 8, 10, 12, 14, 16, 18, 20, 22
+        hour="6-22/2",
         minute=0,
         id="devocional_diario",
         replace_existing=True,
         max_instances=1,
-        misfire_grace_time=3600,    # si el server estaba dormido, corre hasta 1h tarde
-        coalesce=True,              # si perdió varios, ejecuta solo 1
+        misfire_grace_time=3600,
+        coalesce=True,
     )
     scheduler.start()
     print("[lifespan] ⏰ Scheduler iniciado (reintentos 6am-10pm America/Caracas)")
 
     yield
 
-    # 4. Shutdown limpio
     if scheduler.running:
         scheduler.shutdown(wait=False)
         print("[lifespan] ⏰ Scheduler detenido")
@@ -263,27 +258,43 @@ app.add_middleware(
 )
 
 
-# --- Esquemas Pydantic para validación de entrada ---
+# --- Esquemas Pydantic ---
 class UserCreate(BaseModel):
     nombre: str
-    password: str          # PIN de 4 dígitos creado por el usuario
+    password: str          # El frontend sigue enviando "password" = PIN de 4 dígitos
     telegram_id: str = None
     rol: str = "miembro"   # Por seguridad siempre se creará como miembro por defecto
 
+
 class UserLogin(BaseModel):
     user_id: int
-    password: str
+    password: str          # El frontend sigue enviando "password" = PIN
+
+
+class UserOut(BaseModel):
+    """Respuesta pública de usuario: NUNCA incluye pin_hash."""
+    id: int
+    nombre: str
+    rol: str
+    puntuacion_total: int = 0
+    telegram_id: str | None = None
+
+    class Config:
+        from_attributes = True
+
 
 class AnswerItem(BaseModel):
     question_id: int
     respuesta_texto: str
 
+
 class DevotionalAnswerSubmission(BaseModel):
     user_id: int
     respuestas: List[AnswerItem]
 
+
 class PastorEvaluation(BaseModel):
-    estado: str                 # "aprobada" o "rechazada"  (acepta también "correcto"/"incorrecto")
+    estado: str                 # "aprobada" o "rechazada"
     feedback: str = ""
     evaluado_por: int | None = None
 
@@ -294,7 +305,7 @@ def read_root():
     return {"mensaje": "¡La API de la Trivia de la Iglesia está en línea y lista!"}
 
 
-# --- Health check para UptimeRobot (ligero, sin lógica) ---
+# --- Health check ---
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
@@ -307,8 +318,8 @@ def login_usuario(data: UserLogin, db: Session = Depends(get_db)):
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
-    # Comparar contra el PIN individual del usuario
-    if usuario.password != data.password:
+    # Verificar PIN contra el hash bcrypt
+    if not services.verify_password(data.password, usuario.pin_hash):
         raise HTTPException(status_code=401, detail="PIN incorrecto.")
 
     return {
@@ -321,19 +332,17 @@ def login_usuario(data: UserLogin, db: Session = Depends(get_db)):
     }
 
 
-# --- Endpoints de Devocionales y Generación con IA ---
+# --- Endpoints de Devocionales ---
 @app.api_route("/devocionales/generar-diario", methods=["GET", "POST"])
 def generar_devocional_diario(db: Session = Depends(get_db)):
     """
     Idempotente: si ya existe devocional para HOY, no crea otro.
-    Llama a procesar_devocional_del_dia().
     """
     return procesar_devocional_del_dia(db)
 
 
 @app.get("/devocionales/activo", summary="Obtener el devocional de HOY con preguntas")
 def obtener_devocional_activo(usuario_id: int, db: Session = Depends(get_db)):
-    # Solo el devocional de HOY (Venezuela). Si no hay, 404.
     hoy_ve = ahora_ve().date()
     desde = datetime.combine(hoy_ve, datetime.min.time())
     hasta = desde + timedelta(days=1)
@@ -350,7 +359,6 @@ def obtener_devocional_activo(usuario_id: int, db: Session = Depends(get_db)):
             detail="Aún no se ha publicado el devocional de hoy. Vuelve más tarde."
         )
 
-    # Verificar de forma robusta si este usuario ya respondió alguna pregunta de este devocional
     preguntas_ids = [q.id for q in devocional.questions]
     ya_respondido = False
 
@@ -385,14 +393,14 @@ def obtener_devocional_activo(usuario_id: int, db: Session = Depends(get_db)):
 # --- Endpoints de Usuarios ---
 @app.post("/usuarios", summary="Registrar un nuevo miembro con PIN de 4 dígitos")
 def crear_usuario(user: UserCreate, db: Session = Depends(get_db)):
-    # Validar que el PIN sean 4 dígitos numéricos
+    # Validar PIN: 4 dígitos numéricos
     if not user.password.isdigit() or len(user.password) != 4:
         raise HTTPException(
             status_code=422,
             detail="El PIN debe tener exactamente 4 dígitos numéricos."
         )
 
-    # Verificar que no exista un usuario con el mismo nombre (case-insensitive)
+    # Verificar duplicado (case-insensitive)
     existente = db.query(models.User).filter(
         func.lower(models.User.nombre) == user.nombre.strip().lower()
     ).first()
@@ -407,7 +415,7 @@ def crear_usuario(user: UserCreate, db: Session = Depends(get_db)):
         telegram_id=user.telegram_id,
         rol="miembro",
         puntuacion_total=0,
-        password=user.password
+        pin_hash=services.hash_password(user.password),   # ← bcrypt
     )
     db.add(nuevo_usuario)
     db.commit()
@@ -423,13 +431,12 @@ def crear_usuario(user: UserCreate, db: Session = Depends(get_db)):
     }
 
 
-@app.get("/usuarios", summary="Listar todos los usuarios registrados (admin)")
+@app.get("/usuarios", response_model=list[UserOut], summary="Listar todos los usuarios registrados (admin)")
 def listar_usuarios(db: Session = Depends(get_db)):
-    usuarios = db.query(models.User).all()
-    return usuarios
+    return db.query(models.User).all()
 
 
-@app.get("/usuarios/miembros", summary="Listar solo miembros (para login de miembros)")
+@app.get("/usuarios/miembros", response_model=list[UserOut], summary="Listar solo miembros (para login de miembros)")
 def listar_miembros(db: Session = Depends(get_db)):
     return (
         db.query(models.User)
@@ -439,7 +446,7 @@ def listar_miembros(db: Session = Depends(get_db)):
     )
 
 
-@app.get("/usuarios/pastores", summary="Listar solo pastores (para login pastoral)")
+@app.get("/usuarios/pastores", response_model=list[UserOut], summary="Listar solo pastores (para login pastoral)")
 def listar_pastores(db: Session = Depends(get_db)):
     return (
         db.query(models.User)
@@ -450,7 +457,7 @@ def listar_pastores(db: Session = Depends(get_db)):
 
 
 # --- Endpoints de Gestión de Usuarios (Pastor) ---
-@app.get("/pastor/usuarios", summary="Listar usuarios con sus PINs (para panel del pastor)")
+@app.get("/pastor/usuarios", summary="Listar usuarios (sin PIN) para panel del pastor")
 def listar_usuarios_admin(db: Session = Depends(get_db)):
     usuarios = db.query(models.User).order_by(models.User.nombre).all()
     return [
@@ -458,8 +465,7 @@ def listar_usuarios_admin(db: Session = Depends(get_db)):
             "id": u.id,
             "nombre": u.nombre,
             "rol": u.rol,
-            "password": u.password,
-            "puntuacion_total": u.puntuacion_total or 0
+            "puntuacion_total": u.puntuacion_total or 0,
         }
         for u in usuarios
     ]
@@ -467,39 +473,27 @@ def listar_usuarios_admin(db: Session = Depends(get_db)):
 
 @app.post("/pastor/usuarios/{user_id}/reset-pin", summary="Generar un nuevo PIN para un usuario")
 def resetear_pin(user_id: int, db: Session = Depends(get_db)):
-    import random
     usuario = db.query(models.User).filter(models.User.id == user_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
-    nuevo_pin = str(random.randint(1000, 9999))
-    usuario.password = nuevo_pin
+    nuevo_pin = services.generar_pin_aleatorio()
+    usuario.pin_hash = services.hash_password(nuevo_pin)   # ← guardar hash
     db.commit()
 
     return {
-        "mensaje": f"PIN reseteado para {usuario.nombre}.",
+        "mensaje": f"PIN reseteado para {usuario.nombre}. Anótalo, no se volverá a mostrar.",
         "usuario_id": usuario.id,
         "nombre": usuario.nombre,
-        "nuevo_pin": nuevo_pin
+        "nuevo_pin": nuevo_pin,   # única vez que se ve en claro
     }
 
 
-# --- Endpoints de Ranking / Leaderboard ---
+# --- Endpoints de Ranking ---
 @app.get("/ranking", summary="Ranking por período (diario, semanal, mensual, total)")
 def obtener_ranking(periodo: str = "total", db: Session = Depends(get_db)):
-    """
-    Devuelve el ranking de miembros según el período solicitado.
-
-    - `diario`: puntos ganados hoy (desde las 00:00 de hoy)
-    - `semanal`: puntos ganados desde el lunes de esta semana
-    - `mensual`: puntos ganados desde el primer día del mes actual
-    - `total`: acumulado histórico (comportamiento original)
-
-    Solo se incluyen usuarios con rol "miembro".
-    """
     hoy = ahora_ve().date()
 
-    # Determinar la fecha de corte según el período
     if periodo == "diario":
         desde = datetime.combine(hoy, datetime.min.time())
         titulo = f"Hoy · {hoy.isoformat()}"
@@ -509,12 +503,11 @@ def obtener_ranking(periodo: str = "total", db: Session = Depends(get_db)):
     elif periodo == "mensual":
         desde = datetime.combine(hoy.replace(day=1), datetime.min.time())
         titulo = f"{hoy.strftime('%B %Y').capitalize()}"
-    else:  # "total" o cualquier valor no reconocido
+    else:
         desde = None
         titulo = "Ranking general"
         periodo = "total"
 
-    # Query base: miembros con suma de puntos
     query = (
         db.query(
             models.User.id,
@@ -529,7 +522,6 @@ def obtener_ranking(periodo: str = "total", db: Session = Depends(get_db)):
         .filter(models.User.rol == "miembro")
     )
 
-    # Filtrar por fecha de envío si aplica
     if desde is not None:
         query = query.filter(models.UserAnswer.fecha_envio >= desde)
 
@@ -567,7 +559,6 @@ def responder_devocional(submission: DevotionalAnswerSubmission, db: Session = D
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
-    # Bloquear que un pastor responda devocionales como miembro
     if usuario.rol == "pastor":
         raise HTTPException(
             status_code=403,
@@ -632,14 +623,9 @@ def responder_devocional(submission: DevotionalAnswerSubmission, db: Session = D
     }
 
 
-# --- Endpoints del Pastor (Revisión y Evaluación por respuesta) ---
-
+# --- Endpoints del Pastor ---
 @app.get("/respuestas/pendientes", summary="Ver todas las respuestas pendientes de revisión")
 def ver_respuestas_pendientes(db: Session = Depends(get_db)):
-    """
-    Devuelve las respuestas pendientes en un formato plano y alineado con el frontend.
-    Cada ítem representa UNA respuesta (answer) y se evalúa individualmente.
-    """
     respuestas_pendientes = (
         db.query(models.UserAnswer)
         .filter(models.UserAnswer.estado == "pendiente")
@@ -657,23 +643,18 @@ def ver_respuestas_pendientes(db: Session = Depends(get_db)):
         )
 
         lista_pendientes.append({
-            # Identificadores
             "answer_id": r.id,
             "user_id": r.user_id,
-            "usuario_id": r.user_id,          # alias por compatibilidad
+            "usuario_id": r.user_id,
             "nombre_usuario": usuario.nombre if usuario else "Desconocido",
-            # Devocional
             "devocional_id": devocional.id if devocional else None,
             "devocional_titulo": devocional.titulo if devocional else "Desconocido",
-            # Pregunta
             "pregunta_id": r.question_id,
             "tipo_pregunta": pregunta.tipo if pregunta else "desconocido",
             "pregunta_texto": pregunta.enunciado if pregunta else "Desconocido",
-            "enunciado": pregunta.enunciado if pregunta else "Desconocido",   # alias
-            # Respuesta
+            "enunciado": pregunta.enunciado if pregunta else "Desconocido",
             "respuesta_texto": r.respuesta_texto,
-            "respuesta_enviada": r.respuesta_texto,                          # alias
-            # Estado y fechas
+            "respuesta_enviada": r.respuesta_texto,
             "estado": r.estado,
             "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else None,
         })
@@ -697,7 +678,6 @@ def evaluar_respuesta_pastor(
     if answer.estado != "pendiente":
         raise HTTPException(status_code=400, detail="Esta respuesta ya fue evaluada anteriormente.")
 
-    # Normalizar el estado recibido desde el frontend
     estado_raw = (evaluacion.estado or "").strip().lower()
     if estado_raw in ("correcto", "aprobada", "aprobado", "ok"):
         estado_final = "aprobada"
@@ -709,7 +689,6 @@ def evaluar_respuesta_pastor(
             detail=f"Estado inválido: '{evaluacion.estado}'. Use 'correcto'/'incorrecto' o 'aprobada'/'rechazada'."
         )
 
-    # Puntos: aprobada = 10 (consistente con seleccion_simple). Ajustable si luego quieres libre.
     puntos = 10 if estado_final == "aprobada" else 0
 
     answer.estado = estado_final
@@ -718,7 +697,6 @@ def evaluar_respuesta_pastor(
     answer.fecha_evaluacion = datetime.utcnow()
     answer.evaluado_por = evaluacion.evaluado_por
 
-    # Sumar puntos al usuario si aprobó
     if puntos > 0:
         usuario = db.query(models.User).filter(models.User.id == answer.user_id).first()
         if usuario:
@@ -747,10 +725,6 @@ def obtener_respuestas_miembro(
     devocional_id: int,
     db: Session = Depends(get_db)
 ):
-    """
-    Devuelve todas las respuestas de un miembro para un devocional específico,
-    incluyendo el estado de evaluación y el feedback pastoral si ya fue evaluada.
-    """
     usuario = db.query(models.User).filter(models.User.id == user_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
@@ -759,7 +733,6 @@ def obtener_respuestas_miembro(
     if not devocional:
         raise HTTPException(status_code=404, detail="Devocional no encontrado.")
 
-    # Traer todas las respuestas del miembro para las preguntas de este devocional
     preguntas = db.query(models.Question).filter(models.Question.devocional_id == devocional_id).all()
     preguntas_ids = [q.id for q in preguntas]
 
@@ -772,7 +745,6 @@ def obtener_respuestas_miembro(
         .all()
     )
 
-    # Mapear por question_id para asociar rápido
     respuestas_map = {r.question_id: r for r in respuestas}
 
     detalle = []
@@ -784,7 +756,6 @@ def obtener_respuestas_miembro(
     for idx, q in enumerate(preguntas, start=1):
         r = respuestas_map.get(q.id)
         if not r:
-            # El miembro no respondió esta pregunta (no debería pasar, pero por si acaso)
             detalle.append({
                 "orden": idx,
                 "pregunta_id": q.id,

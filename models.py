@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from database import Base
 import datetime
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -11,7 +12,11 @@ class User(Base):
     telegram_id = Column(String, unique=True, nullable=True)
     rol = Column(String, default="miembro")  # "miembro" o "pastor"
     puntuacion_total = Column(Integer, default=0)
-    password = Column(String, nullable=False, default="0000")
+
+    # ── Fase 4: PIN hasheado con bcrypt (antes: "password") ──
+    # Guarda el hash bcrypt, nunca el PIN en texto plano.
+    # Sin default: la app DEBE proveer un hash válido al crear/resetear.
+    pin_hash = Column(String, nullable=False)
 
     answers = relationship(
         "UserAnswer",
@@ -20,6 +25,7 @@ class User(Base):
         foreign_keys="UserAnswer.user_id"
     )
 
+
 class Devotional(Base):
     __tablename__ = "devotionals"
 
@@ -27,9 +33,10 @@ class Devotional(Base):
     titulo = Column(String, nullable=False)
     fecha = Column(DateTime, default=datetime.datetime.utcnow)
     resumen_ia = Column(Text, nullable=True)
-    youtube_id = Column(String, unique=True, nullable=True, index=True)  # ← NUEVO
+    youtube_id = Column(String, unique=True, nullable=True, index=True)
 
     questions = relationship("Question", back_populates="devotional", cascade="all, delete-orphan")
+
 
 class Question(Base):
     __tablename__ = "questions"
@@ -44,6 +51,7 @@ class Question(Base):
     devotional = relationship("Devotional", back_populates="questions")
     answers = relationship("UserAnswer", back_populates="question", cascade="all, delete-orphan")
 
+
 class UserAnswer(Base):
     __tablename__ = "user_answers"
 
@@ -54,7 +62,7 @@ class UserAnswer(Base):
     estado = Column(String, default="pendiente")   # "pendiente", "aprobada", "rechazada"
     puntos_otorgados = Column(Integer, default=0)
 
-    # --- Nuevos campos para el módulo Pastor ---
+    # --- Campos del módulo Pastor ---
     fecha_envio = Column(DateTime, default=datetime.datetime.utcnow)
     feedback_pastor = Column(Text, nullable=True)
     fecha_evaluacion = Column(DateTime, nullable=True)
