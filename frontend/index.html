@@ -22,17 +22,7 @@
 
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-
-        /* ════════════════════════════════════════════════════════
-           OPTIMIZACIONES MÓVIL
-           ════════════════════════════════════════════════════════ */
-
-        /* Evita scroll horizontal por elementos que se salgan 1-2px */
-        html,
-        body {
             overflow-x: hidden;
-            max-width: 100vw;
         }
 
         /* Soporte para notch/dynamic island de iPhone X+ en el nav sticky */
@@ -59,11 +49,6 @@
         /* Mejora el tap-highlight en iOS (evita el flash azul al tocar botones) */
         * {
             -webkit-tap-highlight-color: transparent;
-        }
-
-        /* Deshabilita el rubber-band scroll de iOS en el body (evita "rebotes" raros) */
-        body {
-            overscroll-behavior-y: none;
         }
     </style>
 </head>
