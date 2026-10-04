@@ -20,6 +20,7 @@ import traceback
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
 
+
 class DebugMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         try:
@@ -38,6 +39,7 @@ class DebugMiddleware(BaseHTTPMiddleware):
                     "traceback": traceback.format_exc().split("\n"),
                 },
             )
+
 
 # ════════════════════════════════════════════════════════════
 # CONFIG TEMPORAL (en Fase 4 se centraliza en config.py)
@@ -98,11 +100,15 @@ def procesar_devocional_del_dia(db: Session) -> dict:
       'ya_existe' | 'sin_video' | 'video_ya_usado' | 'creado'
     """
     hoy_ve = ahora_ve().date()
+    desde = datetime.combine(hoy_ve, datetime.min.time())
+    hasta = desde + timedelta(days=1)
 
     # 1. ¿Ya existe devocional para HOY?
+    #    Usamos rango [desde, hasta) para comparar DateTime vs date.
     existente_hoy = (
         db.query(models.Devotional)
-        .filter(models.Devotional.fecha == hoy_ve)
+        .filter(models.Devotional.fecha >= desde)
+        .filter(models.Devotional.fecha < hasta)
         .first()
     )
     if existente_hoy:
@@ -242,6 +248,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # --- Esquemas Pydantic para validación de entrada ---
 class UserCreate(BaseModel):
     nombre: str
@@ -266,15 +273,18 @@ class PastorEvaluation(BaseModel):
     feedback: str = ""
     evaluado_por: int | None = None
 
+
 # --- Ruta Principal ---
 @app.get("/")
 def read_root():
     return {"mensaje": "¡La API de la Trivia de la Iglesia está en línea y lista!"}
 
+
 # --- Health check para UptimeRobot (ligero, sin lógica) ---
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
 
 # --- Endpoints de Autenticación ---
 @app.post("/auth/login", summary="Login por ID de usuario y PIN")
@@ -296,6 +306,7 @@ def login_usuario(data: UserLogin, db: Session = Depends(get_db)):
         }
     }
 
+
 # --- Endpoints de Devocionales y Generación con IA ---
 @app.api_route("/devocionales/generar-diario", methods=["GET", "POST"])
 def generar_devocional_diario(db: Session = Depends(get_db)):
@@ -305,13 +316,17 @@ def generar_devocional_diario(db: Session = Depends(get_db)):
     """
     return procesar_devocional_del_dia(db)
 
+
 @app.get("/devocionales/activo", summary="Obtener el devocional de HOY con preguntas")
 def obtener_devocional_activo(usuario_id: int, db: Session = Depends(get_db)):
     # Solo el devocional de HOY (Venezuela). Si no hay, 404.
     hoy_ve = ahora_ve().date()
+    desde = datetime.combine(hoy_ve, datetime.min.time())
+    hasta = desde + timedelta(days=1)
     devocional = (
         db.query(models.Devotional)
-        .filter(models.Devotional.fecha == hoy_ve)
+        .filter(models.Devotional.fecha >= desde)
+        .filter(models.Devotional.fecha < hasta)
         .first()
     )
 
@@ -351,6 +366,7 @@ def obtener_devocional_activo(usuario_id: int, db: Session = Depends(get_db)):
         "ya_respondido": ya_respondido,
         "preguntas": preguntas_data
     }
+
 
 # --- Endpoints de Usuarios ---
 @app.post("/usuarios", summary="Registrar un nuevo miembro con PIN de 4 dígitos")
@@ -392,10 +408,12 @@ def crear_usuario(user: UserCreate, db: Session = Depends(get_db)):
         }
     }
 
+
 @app.get("/usuarios", summary="Listar todos los usuarios registrados (admin)")
 def listar_usuarios(db: Session = Depends(get_db)):
     usuarios = db.query(models.User).all()
     return usuarios
+
 
 @app.get("/usuarios/miembros", summary="Listar solo miembros (para login de miembros)")
 def listar_miembros(db: Session = Depends(get_db)):
@@ -406,6 +424,7 @@ def listar_miembros(db: Session = Depends(get_db)):
         .all()
     )
 
+
 @app.get("/usuarios/pastores", summary="Listar solo pastores (para login pastoral)")
 def listar_pastores(db: Session = Depends(get_db)):
     return (
@@ -414,6 +433,7 @@ def listar_pastores(db: Session = Depends(get_db)):
         .order_by(models.User.nombre)
         .all()
     )
+
 
 # --- Endpoints de Gestión de Usuarios (Pastor) ---
 @app.get("/pastor/usuarios", summary="Listar usuarios con sus PINs (para panel del pastor)")
@@ -429,6 +449,7 @@ def listar_usuarios_admin(db: Session = Depends(get_db)):
         }
         for u in usuarios
     ]
+
 
 @app.post("/pastor/usuarios/{user_id}/reset-pin", summary="Generar un nuevo PIN para un usuario")
 def resetear_pin(user_id: int, db: Session = Depends(get_db)):
@@ -447,6 +468,7 @@ def resetear_pin(user_id: int, db: Session = Depends(get_db)):
         "nombre": usuario.nombre,
         "nuevo_pin": nuevo_pin
     }
+
 
 # --- Endpoints de Ranking / Leaderboard ---
 @app.get("/ranking", summary="Ranking por período (diario, semanal, mensual, total)")
@@ -523,6 +545,7 @@ def obtener_ranking(periodo: str = "total", db: Session = Depends(get_db)):
         "ranking": ranking_list
     }
 
+
 # --- Endpoints de Respuestas y Evaluación ---
 @app.post("/respuestas", summary="Enviar respuestas a la trivia de un devocional")
 def responder_devocional(submission: DevotionalAnswerSubmission, db: Session = Depends(get_db)):
@@ -593,6 +616,7 @@ def responder_devocional(submission: DevotionalAnswerSubmission, db: Session = D
         "puntuacion_total_acumulada": usuario.puntuacion_total,
         "detalle_respuestas": resultados_evaluacion
     }
+
 
 # --- Endpoints del Pastor (Revisión y Evaluación por respuesta) ---
 
@@ -698,6 +722,7 @@ def evaluar_respuesta_pastor(
         "feedback": answer.feedback_pastor,
         "fecha_evaluacion": answer.fecha_evaluacion.isoformat() if answer.fecha_evaluacion else None
     }
+
 
 @app.get(
     "/miembros/{user_id}/respuestas/{devocional_id}",
